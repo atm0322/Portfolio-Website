@@ -1,5 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg id="Layer_2" data-name="Layer 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 184.34 161.82">
+  <defs>
+    <style>
+      /* 기본(라이트 모드/미지원 브라우저): 검은색 */
+      path, rect { fill: #1b1b1b; }
+      /* 다크 모드를 지원하는 브라우저(Chrome, Firefox 등)에서는 흰색으로 자동 전환 */
+      @media (prefers-color-scheme: dark) {
+        path, rect { fill: #f2f2f2; }
+      }
+    </style>
+  </defs>
   <g id="Layer_1-2" data-name="Layer 1">
     <path d="M151.31,137.91H35.45l.22-.38,57.71-99.96.22.38,57.71,99.96ZM36.32,137.41h114.13l-57.06-98.84-57.06,98.84Z"/>
     <path d="M99.25,1.63h-4.87v13.52h-1.99V1.63h-4.86V0h11.72v1.63Z"/>
