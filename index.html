@@ -1,0 +1,1420 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ttttaaaannnn</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #ffffff;
+    --paper: #111111;
+    --rec: #FF3B30;
+    --mute: #898989;
+    --chip: rgba(200,198,192,0.42);
+    --chip-border: rgba(255,255,255,0.5);
+
+    /* ★ 우측 하단 캡션이 줄바꿈되는 최대 폭. 이 숫자만 바꾸면 됩니다 (px 단위).
+       숫자를 늘리면 한 줄에 더 많은 글자가 들어가고(줄바꿈이 늦게 됨),
+       줄이면 더 일찍 줄바꿈됩니다. */
+    --caption-max-width: 420px;
+
+    /* ★ 상단 칩(NAME/EMAIL/INDEX) 글자색.
+       --mute-onlight: 이미지 가장자리가 밝을 때(흰 배경 등) 쓰는 그레이
+       --mute-ondark : 이미지 가장자리가 어두울 때(검은 배경 등) 쓰는 더 밝은 그레이
+       현재 보이는 이미지의 가장자리 색을 자동으로 감지해서 이 둘 사이를 전환합니다. */
+    --mute-onlight: #898989;
+    --mute-ondark: #b8b6b0;
+
+    /* ★ 로딩화면 삼각형/글자 회전 속도 조절: 이 숫자 하나만 바꾸면 됩니다.
+       한 바퀴(360도) 도는 데 걸리는 시간이고, 로딩이 이 시간보다 오래 걸리면
+       (미디어가 아직 준비 안 됐으면) 자연스럽게 계속 반복해서 돕니다. */
+    --loading-spin-duration: 3.2s;
+
+    /* ★ 모바일 "ROTATE" 문구 속도 조절: 이 두 값만 바꾸면 됩니다.
+       --rotate-hint-fade   : 문구가 서서히 나타나는(사라지는) 시간
+       --rotate-hint-rotate : 0도→90도로 돌아가는 데 걸리는 시간 (숫자를 줄이면 더 빠르게) */
+    --rotate-hint-fade: 0.6s;
+    --rotate-hint-rotate: 1s;
+  }
+  body.bg-dark{ --mute: var(--mute-ondark); }
+  body:not(.bg-dark){ --mute: var(--mute-onlight); }
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  html,body{
+    width:100%; height:100%;
+    background:var(--bg);
+    overflow:hidden;
+    font-family:'Roboto Mono', monospace;
+  }
+  /* ---------- STAGE ---------- */
+  #stage{
+    position:absolute; inset:0;
+    width:100%; height:100%;
+  }
+  .slide{
+    position:absolute; inset:0;
+    width:100%; height:100%;
+    background:#ffffff;
+    opacity:0;
+    transition:opacity 1s cubic-bezier(.4,0,.2,1);
+  }
+  .slide.active{
+    opacity:1;
+    z-index:2;
+  }
+  .slide.prev{
+    opacity:0;
+    z-index:1;
+  }
+  /* ---------- SLIDE FRAME ----------
+     대부분의 이미지는 동일한 캔버스 비율(가로:세로 = 8:5)로 제작되어 있는데,
+     정사각형에 가까운 포스터 이미지 몇 개만 비율이 달라서 화면 폭/높이에 따라
+     다른 이미지들보다 더 크게(또는 작게) 보이는 문제가 있었습니다.
+     그래서 이미지/영상을 직접 화면 전체에 배치하지 않고, 표준 비율(8:5)을 가진
+     "프레임" 안에 넣은 뒤 그 프레임을 화면 안에서 최대한 크게 중앙 정렬합니다.
+     → 표준 비율 이미지는 프레임에 꽉 차고, 포스터처럼 비율이 다른 이미지는
+        같은 프레임 안에서 레터박스로 작게 들어가서, 결과적으로 모든 이미지가
+        항상 같은 높이/크기로 보입니다.
+     프레임 크기(px)는 JS의 sizeSlideFrames() 함수에서 계산해서 넣어줍니다. */
+  .slide-frame{
+    position:absolute;
+    top:50%; left:50%;
+    transform:translate(-50%, -50%);
+  }
+  .slide img, .slide video, .slide canvas{
+    position:absolute;
+    top:-1px; left:-1px; right:-1px; bottom:-1px;
+    width:calc(100% + 2px);
+    height:calc(100% + 2px);
+    object-fit:contain;
+    object-position:center;
+    display:block;
+    border:none;
+    outline:none;
+    filter:saturate(1.02);
+  }
+  #grain{
+    position:absolute; inset:0; z-index:6; pointer-events:none;
+    opacity:0.05; mix-blend-mode:overlay;
+  }
+
+  /* ---------- TOP LEFT: NAME / EMAIL ---------- */
+  #identity-row{
+    position:absolute; top:28px; left:28px; z-index:20;
+    display:flex; flex-direction:row; align-items:center; gap:8px;
+  }
+  #identity-name, #identity-email{
+    padding:14px 18px;
+    background:var(--chip);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+    border-radius: 24px;
+    isolation:isolate;
+    overflow:hidden;
+    font-family:'Roboto Mono', monospace;
+    font-size:11px;
+    letter-spacing:0.08em;
+    line-height:1;
+  }
+  #identity-name{
+    color:#1b1b1b;
+    text-transform:uppercase;
+  }
+  #identity-name a{
+    color:inherit;
+    text-decoration:none;
+    transition:color .2s;
+  }
+  #identity-name a:hover{
+    color:var(--paper);
+  }
+  #identity-name a:focus-visible{
+    outline:2px solid var(--paper);
+    outline-offset:2px;
+  }
+  /* "tt__a__nn"에서 언더바(__) 두 개가 유독 넓어 보이지 않도록 그 부분만 자간을 좁힘 */
+  #identity-name .tight-us{
+    letter-spacing:-0.09em;
+    margin:0 -0.02em;
+  }
+  #identity-email{
+    color:var(--mute);
+  }
+  #identity-email a{
+    color:inherit;
+    text-decoration:none;
+    transition:color .2s;
+  }
+  #identity-email a:hover{
+    color:var(--paper);
+  }
+  #identity-email a:focus-visible{
+    outline:2px solid var(--paper);
+    outline-offset:2px;
+  }
+  /* 인덱스 그리드가 열려있을 때: 이름/이메일도 닫기 버튼과 같은 컬러 세팅
+     (반투명 화이트 배경 + 원래 폰트컬러, 이메일은 호버 시 블랙) */
+  body.grid-open #identity-name,
+  body.grid-open #identity-email{
+    background:rgba(255,255,255,0.55);
+    color:var(--mute);
+  }
+  body.grid-open #identity-email a:hover{ color:#000; }
+  body.grid-open #identity-name a:hover{ color:#000; }
+
+  /* ---------- MOBILE: LOADING SCREEN ---------- */
+  #loading-screen{
+    position:fixed; inset:0; z-index:100;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--bg);
+    transition:opacity .7s ease;
+  }
+  #loading-screen.hidden{
+    opacity:0;
+    pointer-events:none;
+  }
+
+  /* ---------- LOADING MARK: 삼각형 + T/A/N 모노그램 ----------
+     - 박스는 200x200, 중심은 (100,100). 전체적으로 사이즈를 줄여서 예전(320x320)보다
+       화면에서 차지하는 비중이 작아졌습니다.
+     - 페이지가 열리자마자 바로 애니메이션이 시작됩니다 (더 이상 대기/일시정지 없음).
+     - 삼각형은 반시계(왼쪽), 글자(T/A/N)는 시계 방향으로 서로 반대로 120도씩
+       회전/공전합니다. 각 구간은 "제자리 정지 → 회전" 순서이고, 한 바퀴(2.5초)를
+       무한 반복합니다. 로딩이 오래 걸리면 그만큼 계속 반복해서 돌다가, 미디어가
+       준비된 직후 맞이하는 첫 "한 바퀴 완료" 시점에 다음 페이지로 넘어갑니다
+       (아래 JS의 animationiteration 리스너 참고). */
+  #loading-mark, .spinner-mark{
+    position:relative;
+    width:200px; height:200px;
+    opacity:0;
+    animation:fadeInName .8s ease forwards .15s;
+    transition:opacity .4s ease;
+  }
+  /* ★ 겹침 버그 원인: 위 fadeInName 애니메이션이 forwards로 opacity:1을 고정시켜두면,
+     CSS 애니메이션 값이 일반 클래스 규칙보다 우선순위가 높아서 .hide{opacity:0}을
+     그냥 덮어써도 실제로는 안 사라지고 있었습니다. !important로 확실히 이겨줍니다. */
+  #loading-mark.hide, .spinner-mark.hide{ opacity:0 !important; }
+  #loading-triangle, .spinner-triangle{
+    position:absolute; inset:0;
+    width:100%; height:100%;
+    transform-origin: 100px 100px;
+    animation: triSpin var(--loading-spin-duration) linear infinite;
+  }
+  #loading-triangle polygon, .spinner-triangle polygon{
+    fill:none;
+    stroke:var(--paper);
+    stroke-width:0.75;
+  }
+  #loading-triangle line, .spinner-triangle line{
+    stroke:var(--paper);
+    stroke-width:0.75;
+  }
+  /* 인덱스 그리드에서 재활용되는 로딩 모션(.spinner-mark)은 그레이 배경 위에
+     놓이므로 흰색으로 보이도록 색만 따로 덮어씁니다 (첫 화면 로딩 모션 색은 그대로). */
+  .spinner-mark .spinner-triangle polygon,
+  .spinner-mark .spinner-triangle line{
+    stroke:#fff;
+  }
+  .spinner-mark .counter-spin{
+    color:#fff;
+  }
+
+  /* T/A/N 글자: "관람차" 구조.
+     1) .orbit-base-*  : 글자마다 원래 자리(꼭짓점) 각도로 고정 (T=0°, A=120°, N=240°)
+     2) .orbit-spin    : 삼각형과 반대(시계) 방향으로 120도씩 돌면서 중심을 축으로 공전
+                         → 옆 꼭짓점 위치로 스윙 이동
+     3) .orbit-arm     : 중심에서 반지름(88px)만큼 실제 꼭짓점보다 더 바깥으로 밀어냄
+                         (틱선 끝보다 확실히 더 밖에 위치해서 겹치지 않음)
+     4) .counter-base / .counter-spin : 공전 각도(위 1+2)를 정확히 반대로 다시 걸어서
+                         상쇄 → 글자 자체는 빙글빙글 돌지 않고 항상 똑바로 선 채로
+                         꼭짓점 사이를 스윽 이동하는 것처럼 보입니다. */
+  .orbit-base{
+    position:absolute;
+    top:100px; left:100px;
+    width:0; height:0;
+  }
+  .orbit-base-t{ transform:rotate(0deg); }
+  .orbit-base-a{ transform:rotate(120deg); }
+  .orbit-base-n{ transform:rotate(240deg); }
+
+  .orbit-spin{
+    display:block;
+    animation: letterOrbitCW var(--loading-spin-duration) linear infinite;
+  }
+  .orbit-arm{
+    position:absolute;
+    top:0; left:0;
+    transform: translate(-50%, -88px); /* 중심에서 반지름 88px만큼 위(꼭짓점 방향)로 이동 */
+  }
+
+  .counter-base{ display:inline-block; }
+  .counter-base-t{ transform:rotate(0deg); }
+  .counter-base-a{ transform:rotate(-120deg); }
+  .counter-base-n{ transform:rotate(-240deg); }
+
+  .counter-spin{
+    display:inline-block;
+    font-family:'Roboto Mono', monospace;
+    font-size:13px;
+    letter-spacing:0.05em;
+    color:var(--paper);
+    animation: letterOrbitCCW var(--loading-spin-duration) linear infinite;
+  }
+
+  /* ★ 한 바퀴(--loading-spin-duration, 기본 2.5초)를 3구간(각 33.33%)으로 나눠서,
+     각 구간은 앞 절반 정지, 뒤 절반 동안 120도 회전합니다. infinite라 이 사이클이
+     끝없이 반복되고, 로딩이 오래 걸리면 그만큼 자연스럽게 계속 돕니다. */
+  @keyframes triSpin{
+    0%     { transform:rotate(0deg); }
+    16.67% { transform:rotate(0deg); }
+    33.33% { transform:rotate(-120deg); }
+    50%    { transform:rotate(-120deg); }
+    66.67% { transform:rotate(-240deg); }
+    83.33% { transform:rotate(-240deg); }
+    100%   { transform:rotate(-360deg); }
+  }
+  @keyframes letterOrbitCW{
+    0%     { transform:rotate(0deg); }
+    16.67% { transform:rotate(0deg); }
+    33.33% { transform:rotate(120deg); }
+    50%    { transform:rotate(120deg); }
+    66.67% { transform:rotate(240deg); }
+    83.33% { transform:rotate(240deg); }
+    100%   { transform:rotate(360deg); }
+  }
+  @keyframes letterOrbitCCW{
+    0%     { transform:rotate(0deg); }
+    16.67% { transform:rotate(0deg); }
+    33.33% { transform:rotate(-120deg); }
+    50%    { transform:rotate(-120deg); }
+    66.67% { transform:rotate(-240deg); }
+    83.33% { transform:rotate(-240deg); }
+    100%   { transform:rotate(-360deg); }
+  }
+  @keyframes fadeInName{
+    to{ opacity:1; }
+  }
+
+  /* ---------- MOBILE: ROTATE 안내 문구 ----------
+     세로로 들고 있는 폰에서만: 로딩 애니메이션(삼각형)이 미디어 준비 완료 후 맞이하는
+     첫 "한 바퀴 완료" 시점에, "ROTATE" 문구가 제자리(0도, 지금 폰을 세로로 들고 봤을
+     때의 정상 방향)에서 천천히 나타났다가, 실제 콘텐츠(#rotate-wrapper)가 회전하는
+     것과 똑같은 방향(0도→90도)으로 돌아가면서 "화면이 이렇게 돌아갑니다"를 미리
+     보여주고, 그 직후 실제 콘텐츠(이미 그 각도로 맞춰져 있음)가 나타납니다.
+     ★ 속도 조절: 아래 --rotate-hint-* 변수만 바꾸면 됩니다. */
+  #rotate-hint{
+    position:absolute;
+    font-family:'Roboto Mono', monospace;
+    font-size:13px;
+    letter-spacing:0.3em;
+    color:var(--paper);
+    opacity:0;
+    transform:rotate(0deg);
+    transition:opacity var(--rotate-hint-fade) ease;
+    pointer-events:none;
+  }
+  #rotate-hint.show{ opacity:1; }
+  #rotate-hint.flatten{
+    transition:opacity var(--rotate-hint-fade) ease, transform var(--rotate-hint-rotate) cubic-bezier(.65,0,.35,1);
+    transform:rotate(90deg);
+  }
+
+  /* ---------- MOBILE: FORCE-LANDSCAPE WRAPPER ----------
+     JS sets explicit width/height/transform on this element.
+     #stage / #identity-row / #index / #index-btn / #grid-overlay 등은
+     모두 position:absolute로 이 래퍼를 기준으로 위치하며, 같은 합성
+     레이어를 공유한다 (각각 fixed로 따로 있으면 브라우저가 별도 GPU
+     레이어로 분리해서 여러 효과가 깨지는 문제가 있었음). */
+  #rotate-wrapper{
+    position:fixed;
+    inset:0;
+  }
+
+  /* ---------- BOTTOM RIGHT: CAPTION ---------- */
+  #index{
+    position:absolute; bottom:28px; right:28px; z-index:30;
+    max-width:min(46vw, var(--caption-max-width));
+    font-size:11px; letter-spacing:0.08em;
+    text-align:right;
+    pointer-events:none;
+  }
+  #caption-text{
+    display:inline-block;
+    color:#c9c9c4;
+    /* 단어(하이픈으로 연결된 프로젝트명 등) 중간에서 애매하게 끊기지 않도록 */
+    word-break:keep-all;
+    overflow-wrap:normal;
+    hyphens:none;
+  }
+
+  /* ---------- TOP RIGHT: INDEX TOGGLE ---------- */
+  #index-btn{
+    position:absolute; top:28px; right:28px; z-index:20;
+    font-family:'Roboto Mono', monospace;
+    font-size:11px; letter-spacing:0.08em;
+    line-height:1;
+    color:var(--mute);
+    background:var(--chip);
+    padding:9px 14px;
+    border:none;
+    outline:none;
+    border-radius:24px;
+    cursor:pointer;
+    -webkit-appearance:none;
+    appearance:none;
+    backdrop-filter:blur(22px) saturate(180%);
+    -webkit-backdrop-filter:blur(22px) saturate(180%);
+    isolation:isolate;
+    transition:color .2s;
+  }
+  #index-btn:hover{ color:var(--paper); }
+  #index-btn:focus-visible{
+    outline:2px solid var(--paper);
+    outline-offset:2px;
+  }
+  /* 인덱스가 열려있을 때(닫기 ✕ 상태): 배경은 반투명 화이트, 글자는 원래 폰트컬러,
+     마우스 오버 시 블랙으로 */
+  #index-btn.is-close{
+    background:rgba(255,255,255,0.55);
+    color:var(--mute);
+  }
+  #index-btn.is-close:hover{ color:#000; }
+
+  body.grid-open #index{
+    display:none;
+  }
+
+  /* ---------- FULLSCREEN THUMBNAIL GRID ---------- */
+  #grid-overlay{
+    position:absolute; inset:0; z-index:15;
+    background:rgb(200,198,192); /* 인덱스 버튼(--chip)과 같은 톤의 불투명 그레이 */
+    display:none;
+    overflow-y:auto;
+    padding:90px 28px 40px;
+  }
+  #grid-overlay.open{ display:block; }
+
+  /* 인덱스(썸네일 그리드)를 처음 열 때, 이미지들이 아직 로딩 중이면 그 위에
+     첫 로딩화면과 같은 삼각형 모션을 잠깐 보여줍니다 (아래 JS 참고). */
+  #grid-loading{
+    position:absolute; inset:0;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    background:rgb(200,198,192);
+    z-index:1;
+  }
+  #grid-loading.show{ display:flex; }
+  #grid-container{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(160px, 1fr));
+    gap:10px;
+    max-width:1400px;
+    margin:0 auto;
+  }
+  .grid-thumb{
+    position:relative;
+    aspect-ratio:1/1;
+    overflow:hidden;
+    cursor:pointer;
+    background:#141414;
+    border-radius:12px;
+    clip-path:inset(0 round 12px); /* 모서리 안티앨리어싱 이음새(미세한 선) 제거 */
+    filter:drop-shadow(0 1px 6px rgba(0,0,0,0.12)); /* box-shadow 대신: 클리핑된 실제
+      모양을 따라 그려지므로 모서리에 이음새가 생기지 않음 */
+  }
+  .grid-thumb img{
+    width:100%; height:100%;
+    object-fit:cover;
+    display:block;
+    border-radius:inherit; /* 컨테이너와 동일한 반지름을 줘서 모서리에 미세한 선이 보이던 문제 해결 */
+    filter:brightness(1);
+    transition:filter .25s ease;
+  }
+  .grid-thumb:hover img{
+    filter:brightness(0.55);
+  }
+  .grid-thumb .grid-label{
+    position:absolute; left:0; right:0; bottom:0;
+    padding:7px 9px;
+    font-size:10px; letter-spacing:0.02em;
+    color:#fff;
+    opacity:0;
+    transition:opacity .25s ease;
+    pointer-events:none;
+  }
+  .grid-thumb:hover .grid-label{
+    opacity:1;
+  }
+
+  @media (max-width: 640px){
+    #identity-row{ top:16px; left:16px; gap:6px; }
+    #identity-name, #identity-email{ padding:11px 14px; }
+    #identity-name, #identity-email{ font-size:11px; }
+    #index{ font-size:10.5px; bottom:16px; right:16px; }
+    #index-btn{ top:16px; right:16px; padding:7px 11px; font-size:10px; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .slide{ transition:opacity 1s linear; transform:none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div id="loading-screen">
+  <div id="loading-mark">
+    <svg id="loading-triangle" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid meet">
+      <polygon points="100,50 143,125 57,125" />
+      <line x1="100" y1="50"  x2="100" y2="41" />
+      <line x1="143" y1="125" x2="151" y2="130" />
+      <line x1="57"  y1="125" x2="49"  y2="130" />
+    </svg>
+
+    <div class="orbit-base orbit-base-t">
+      <div class="orbit-spin">
+        <div class="orbit-arm">
+          <span class="counter-base counter-base-t"><span class="counter-spin">T</span></span>
+        </div>
+      </div>
+    </div>
+    <div class="orbit-base orbit-base-a">
+      <div class="orbit-spin">
+        <div class="orbit-arm">
+          <span class="counter-base counter-base-a"><span class="counter-spin">A</span></span>
+        </div>
+      </div>
+    </div>
+    <div class="orbit-base orbit-base-n">
+      <div class="orbit-spin">
+        <div class="orbit-arm">
+          <span class="counter-base counter-base-n"><span class="counter-spin">N</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="rotate-hint"></div>
+</div>
+
+<div id="rotate-wrapper">
+  <div id="stage"></div>
+  <canvas id="grain"></canvas>
+
+  <div id="identity-row">
+    <div id="identity-name"><a href="https://www.instagram.com/tt__a__nn/" target="_blank" rel="noopener noreferrer">tt<span class="tight-us">__</span>a<span class="tight-us">__</span>nn</a></div>
+    <div id="identity-email"><a href="mailto:taiminahn@gmail.com">taiminahn@gmail.com</a></div>
+  </div>
+
+  <button id="index-btn" aria-pressed="false">INDEX</button>
+
+  <div id="grid-overlay">
+    <div id="grid-loading"></div>
+    <div id="grid-container"></div>
+  </div>
+
+  <div id="index">
+    <span id="caption-text"></span>
+  </div>
+</div>
+
+<script type="application/json" id="media-data">
+[
+  {"type":"image","src":"images/00-roughtype-logotype.jpg","label":"ROUGHTYPE — WORDMARK"},
+  {"type":"image","src":"images/01-roughtype-symbol.jpg","label":"ROUGHTYPE — LOGOMARK GRID","grid":true},
+  {"type":"image","src":"images/02-roughtype-logotype.jpg","label":"ROUGHTYPE — CAMPAIGN","grid":true},
+  {"type":"image","src":"images/03-roughtype.jpg","label":"ROUGHTYPE — TYPE CONSTRUCTION"},
+  {"type":"image","src":"images/04-fardeya-logotype.jpg","label":"FARDEYA — WORDMARK","grid":true},
+  {"type":"image","src":"images/05-fardeya-illustration.jpg","label":"FARDEYA — ICON SET","grid":true},
+  {"type":"image","src":"images/06-laneige-bespoke-packaging.jpg","label":"LANEIGE BESPOKE — PACKAGING"},
+  {"type":"image","src":"images/07-laneige-bespoke-packaging.jpg","label":"LANEIGE BESPOKE — PACKAGING SYSTEM","grid":true},
+  {"type":"image","src":"images/08-laneige-packaging.jpg","label":"LANEIGE — PACKAGING","grid":true},
+  {"type":"image","src":"images/09-laneige-packaging.jpg","label":"LANEIGE — PACKAGING SYSTEM"},
+  {"type":"image","src":"images/10-from-joy-with-love-mv-lettering.jpg","label":"SELF LOVE — FILM STILL","grid":true},
+  {"type":"image","src":"images/11-bfk-tshirts.jpg","label":"MERCH — T-SHIRT CAPSULE","grid":true},
+  {"type":"image","src":"images/12-beidelli-logotype.jpg","label":"BEIDELLI — WORDMARK","grid":true},
+  {"type":"image","src":"images/13-audeum-motion-poster.jpg","label":"AUDEUM — POSTER MOTION","grid":true,"gridOnly":true,"linkedIndex":45},
+  {"type":"video","src":"videos/audeum-poster-motion.mp4","label":"AUDEUM — POSTER MOTION"},
+  {"type":"image","src":"images/15-bfk-symbol.jpg","label":"BFK — LOGOTYPE","grid":true},
+  {"type":"image","src":"images/16-bloomtide-symbol.jpg","label":"BLOOMTIDE — LOGO CONSTRUCTION"},
+  {"type":"image","src":"images/17-bloomtide-symbol.jpg","label":"BLOOMTIDE — LOGOTYPE & SYMBOL"},
+  {"type":"image","src":"images/18-returnity-symbol.jpg","label":"RETURNITY — LOGOMARK","grid":true},
+  {"type":"image","src":"images/19-hiddenny-apparel-graphic.jpg","label":"HIDDEN — LOGO & APPAREL","grid":true},
+  {"type":"image","src":"images/20-hiddenny-apparel-graphic.jpg","label":"HIDDEN — LOGO & APPAREL"},
+  {"type":"image","src":"images/21-redcat-poster.jpg","label":"REDCAT — EVENT POSTER","grid":true},
+  {"type":"image","src":"images/22-redcat-poster.jpg","label":"REDCAT — CONCERT POSTER","grid":true},
+  {"type":"image","src":"images/23-calarts-lecture-poster.jpg","label":"CALARTS — LECTURE POSTER","grid":true},
+  {"type":"image","src":"images/24-event-flyer-poster.jpg","label":"EVENT FLYER — HAND-DRAWN","grid":true},
+  {"type":"image","src":"images/25-lofi-typedesign.jpg","label":"LOFI — TYPE SPECIMEN","grid":true},
+  {"type":"image","src":"images/26-bfk-zine-pattern-graphic.jpg","label":"BFK — COLORPLAY PATTERN STUDIES"},
+  {"type":"image","src":"images/27-bfk-zine.jpg","label":"BFK — COLORPLAY ZINE","grid":true},
+  {"type":"image","src":"images/28-bfk-tote-bags.jpg","label":"BFK — COLORPLAY TOTE BAGS","grid":true},
+  {"type":"image","src":"images/29-bpd-apparel-graphic.jpg","label":"BPD GEMEINSCHAFT — APPAREL","grid":true},
+  {"type":"image","src":"images/30-event-flyer-poste.jpg","label":"CALARTS — TYPOGRAPHY POSTER","grid":true},
+  {"type":"image","src":"images/31-roberto-zucco-theater-poster.jpg","label":"ROBERTO ZUCCO — THEATER POSTER","grid":true},
+  {"type":"image","src":"images/32-nation-currency-design.jpg","label":"NATION — CURRENCY DESIGN","grid":true},
+  {"type":"image","src":"images/33-openai-creative-lab-seoul-motion.jpg","label":"OPENAI CREATIVE LAB SEOUL — MOTION","grid":true,"gridOnly":true,"linkedIndex":46},
+  {"type":"video","src":"videos/openai-creative-lab-seoul.mp4","label":"OPENAI CREATIVE LAB SEOUL — MOTION"},
+  {"type":"image","src":"images/35-corporeal-threshold-spatial-diagram.jpg","label":"CORPOREAL THRESHOLD — SPATIAL DIAGRAM","grid":true},
+  {"type":"image","src":"images/36-corporeal-threshold-form-study.jpg","label":"CORPOREAL THRESHOLD — FORM STUDY","grid":true},
+  {"type":"image","src":"images/37-krucialize-graphic.jpg","label":"KRUCIALIZE — COLLAGE TYPE","grid":true},
+  {"type":"image","src":"images/38-krucialize-website-design.jpg","label":"KRUCIALIZE — WEBSITE DESIGN"},
+  {"type":"image","src":"images/39-krucialize-graphic.jpg","label":"EXERCISE / EXORCISE — ALBUM PACKAGING","grid":true},
+  {"type":"image","src":"images/40-exercise-exorcise-album-cover.jpg","label":"KRUCIALIZE — JOIN THE KREW","grid":true},
+  {"type":"image","src":"images/41-epic-nba-kinematic-demo-motion-graphic.jpg","label":"EPIC NBA — KINEMATIC DEMO","grid":true,"gridOnly":true,"linkedIndex":47},
+  {"type":"video","src":"videos/epic-nba-kinematic-demo.mp4","label":"EPIC NBA — KINEMATIC DEMO"},
+  {"type":"image","src":"images/42-puppet-island-typeface.jpg","label":"PUPPET ISLAND — TYPEFACE","grid":true},
+  {"type":"image","src":"images/43-tijuana-fighter-illustration.jpg","label":"TIJUANA FIGHTER 2 — GAME UI/LOGOS","grid":true},
+  {"type":"video","src":"videos/full-audeum-poster-motion.mp4","label":"AUDEUM — POSTER MOTION"},
+  {"type":"video","src":"videos/full-openai-creative-lab-seoul.mp4","label":"OPENAI CREATIVE LAB SEOUL — MOTION"},
+  {"type":"video","src":"videos/full-epic-nba-kinematic-demo.mp4","label":"EPIC NBA — KINEMATIC DEMO"},
+  {"type":"image","src":"images/44-killers-of-the-flower-moon.jpg","label":"KILLERS OF THE FLOWER MOON — MOTION","grid":true,"gridOnly":true,"linkedIndex":49},
+  {"type":"video","src":"videos/full-killers-of-the-flower-moon.mp4","label":"KILLERS OF THE FLOWER MOON — MOTION"},
+  {"type":"video","src":"videos/killers-of-the-flower-moon.mp4","label":"KILLERS OF THE FLOWER MOON — MOTION"},
+  {"type":"image","src":"images/45-grim-fandango.jpg","label":"GRIM FANDANGO — MOTION","grid":true,"gridOnly":true,"linkedIndex":52},
+  {"type":"video","src":"videos/full-grim-fandango.mp4","label":"GRIM FANDANGO — MOTION"},
+  {"type":"video","src":"videos/grim-fandango.mp4","label":"GRIM FANDANGO — MOTION"}
+]
+</script>
+
+<script>
+/* ============================================================
+   교체 방법 (HOW TO USE YOUR OWN MEDIA)
+   ------------------------------------------------------------
+   아래 MEDIA 배열의 각 항목을 실제 파일로 바꾸세요.
+   - type: "image" 또는 "video"
+   - src : 파일 경로 (같은 폴더에 images/, videos/ 폴더를 만들어 넣는 걸 추천)
+   - label: 화면 우측 하단 구석에 살짝 표시되는 작업명 (선택, 비워도 됨)
+
+   예)
+   { type:"image", src:"images/project-01.jpg", label:"BRAND FILM — STILL" },
+   { type:"video", src:"videos/reel-02.mp4",   label:"DIRECTOR'S CUT" },
+
+   현재는 실제 이미지/영상 파일이 base64로 인라인 임베드되어 있습니다.
+   ============================================================ */
+
+/* ============================================================
+   MOBILE: LOADING SCREEN + FORCE-LANDSCAPE
+   ------------------------------------------------------------
+   폰(가로/세로 상관없이 짧은 쪽 화면이 640px 이하)일 때만:
+   1) 삼각형 + T/A/N 회전 모노그램이 뜨는 로딩 화면을 (방향 상관없이 똑바로 선 채로)
+      2.5초에 한 바퀴씩 계속 반복해서 보여주다가 (로딩이 오래 걸리면 그만큼 반복)
+   2) 세로로 들고 있었다면, 미디어 준비 완료 후 맞는 첫 "한 바퀴 완료" 시점에
+      "ROTATE" 문구가 0도→90도로 돌아가며 화면이 곧 가로로 바뀐다는 걸 알려주고
+   3) 실제 콘텐츠(#rotate-wrapper)는 항상 가로형으로 보이도록 함
+      → 세로로 들고 있으면 콘텐츠 전체를 90도 회전
+      → 이미 가로로 들고 있으면 회전 없이 그대로 (이 경우 ROTATE 문구도 생략)
+   태블릿/데스크톱에서는 ROTATE 문구 없이 그 시점에 바로 다음 화면으로 넘어감.
+   ============================================================ */
+const loadingScreen = document.getElementById('loading-screen');
+const rotateHint = document.getElementById('rotate-hint');
+// ★ 이미지 한 장이 화면에 얼마나 오래 떠있을지는 이 숫자로 조절하세요 (단위: 밀리초)
+const IMAGE_HOLD_MS = 2800;
+// ★ 인덱스 그리드에서 직접 골라서 볼 때는 이 시간만큼 (기본 IMAGE_HOLD_MS보다 길게)
+//   보여준 뒤 다음 이미지로 넘어갑니다. 숫자만 바꾸면 조절됩니다.
+const GRID_SELECT_HOLD_MS = 5000;
+// ★ 영상은 기본적으로 실제 재생 길이만큼 자동으로 재생되지만, 길이를 못 읽어오는 경우의
+//   대체(fallback) 시간은 이 숫자로 조절하세요 (단위: 밀리초)
+const VIDEO_FALLBACK_HOLD_MS = 6000;
+const loadingMark = document.getElementById('loading-mark');
+const rotateWrapper = document.getElementById('rotate-wrapper');
+
+function isPhoneViewport(){
+  return Math.min(window.innerWidth, window.innerHeight) <= 640;
+}
+
+function applyRotation(){
+  if(!isPhoneViewport()){
+    rotateWrapper.style.cssText = 'position:fixed; inset:0;';
+    return;
+  }
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  rotateWrapper.style.position = 'fixed';
+  rotateWrapper.style.top = '50%';
+  rotateWrapper.style.left = '50%';
+  if(w < h){
+    // 세로로 들고 있음 → 콘텐츠를 90도 돌려서 가로형으로 보이게
+    rotateWrapper.style.width = h + 'px';
+    rotateWrapper.style.height = w + 'px';
+    rotateWrapper.style.transform = 'translate(-50%, -50%) rotate(90deg)';
+  } else {
+    // 이미 가로로 들고 있음 → 회전 불필요
+    rotateWrapper.style.width = w + 'px';
+    rotateWrapper.style.height = h + 'px';
+    rotateWrapper.style.transform = 'translate(-50%, -50%)';
+  }
+}
+
+applyRotation();
+window.addEventListener('resize', applyRotation);
+window.addEventListener('orientationchange', () => setTimeout(applyRotation, 60));
+
+// 무거운 초기화(거대한 MEDIA 데이터 파싱 및 렌더 준비)를 다음 tick으로 미뤄서,
+// 브라우저가 그 전에 로딩 화면을 최소 한 번은 화면에 그릴 수 있게 함 → 흰 화면만 뜨는 문제 방지
+setTimeout(function(){
+const MEDIA = JSON.parse(document.getElementById('media-data').textContent);
+
+// ============================================================
+// 캡션(우측 하단에 표시되는 작업명) 텍스트를 여기서 쉽게 수정하세요.
+// 왼쪽 숫자는 이미지/영상 순번이고, 오른쪽 문자열이 화면에 뜨는 텍스트입니다.
+// 텍스트만 원하는 대로 고치면 되고, 숫자(순번)는 건드리지 마세요.
+// ============================================================
+const CAPTIONS = {
+  0: "ROUGHTYPE — LOGOTYPE",
+  1: "ROUGHTYPE — LOGOTYPE",
+  2: "ROUGHTYPE — LOGOTYPE",
+  3: "ROUGHTYPE — LOGOTYPE",
+  4: "FARDEYA — LOGOTYPE",
+  5: "FARDEYA — ILLUSTRATION",
+  6: "LANEIGE BESPOKE — PACKAGING",
+  7: "LANEIGE BESPOKE — PACKAGING",
+  8: "LANEIGE — PACKAGING",
+  9: "LANEIGE — PACKAGING",
+  10: "FROM JOY, WITH LOVE MV — LETTERING",
+  11: "BERLIN PHOTOBOOK DISTRIBUTION\n— APPAREL GRAPHIC",
+  12: "BEIDELLI — LOGOTYPE",
+  // 13: "AUDEUM — MOTION POSTER",
+  14: "AUDEUM — MOTION POSTER",
+  15: "BFK — LOGOTYPE",
+  16: "BLOOMTIDE — SYMBOL",
+  17: "BLOOMTIDE — SYMBOL",
+  18: "RETURNITY — LOGOTYPE",
+  19: "HIDDEN NY — APPAREL GRAPHIC",
+  20: "HIDDEN NY — APPAREL GRAPHIC",
+  22: "REDCAT — POSTER DESIGN",
+  23: "EVENT FLYER — POSTER DESIGN",
+  24: "EVENT FLYER — POSTER DESIGN",
+  25: "LOFI — TYPE DESIGN",
+  26: "BFK — PATTERN GRAPHIC",
+  27: "BFK — ZINE",
+  28: "BFK — TOTE BAGS",
+  29: "BERLIN PHOTOBOOK DISTRIBUTION\n— APPAREL DESIGN",
+  //30: "EVENT FLYER — POSTER DESIGN",
+  31: "ROBERTO ZUCCO — POSTER DESIGN",
+  32: "NATION CURRENCY — GRAPHIC DESIGN",
+  33: "OPENAI CREATIVE LAB SEOUL\nDOCUMENTARY — CREATIVE DIRECTION",
+  34: "OPENAI CREATIVE LAB SEOUL\nDOCUMENTARY — CREATIVE DIRECTION",
+  35: "CORPOREAL THRESHOLD — FORM STUDY",
+  36: "CORPOREAL THRESHOLD — FORM STUDY",
+  37: "KRUCIALIZE — GRAPHIC DESIGN",
+  38: "KRUCIALIZE — WEBSITE DESIGN",
+  39: "EXERCISE / EXORCISE — ALBUM COVER",
+  40: "KRUCIALIZE — GRAPHIC DESIGN",
+  // 41: "EPIC NBA KINEMATIC DEMO — MOTION GRAPHIC",
+  42: "EPIC NBA KINEMATIC DEMO\n— MOTION GRAPHIC",
+  43: "PUPPET ISLAND — TYPE DESIGN",
+  44: "TIJUANA FIGHTER 2 — ILLUSTRATION",
+  50: "KILLERS OF THE FLOWER MOON — MOTION GRAPHIC",
+  53: "GRIM FANDANGO — MOTION GRAPHIC",
+};
+MEDIA.forEach((item, i) => { if(CAPTIONS[i] !== undefined) item.label = CAPTIONS[i]; });
+
+/* ------------------------------------------------------------
+   LAZY 2-LAYER PLAYBACK
+   50개가 넘는 미디어를 한번에 DOM에 올려두면(=한번에 전부 로드)
+   초기 로딩이 매우 느려지므로, 화면에는 딱 2개 레이어(현재 보이는 것 /
+   다음에 보여줄 것)만 만들어두고, 지나간 미디어는 즉시 메모리에서 비웁니다.
+------------------------------------------------------------ */
+const stage = document.getElementById('stage');
+
+const layerA = document.createElement('div');
+const layerB = document.createElement('div');
+layerA.className = 'slide';
+layerB.className = 'slide';
+stage.appendChild(layerA);
+stage.appendChild(layerB);
+
+// 각 레이어 안에 표준 비율(8:5) 프레임을 하나씩 만들어 두고, 실제 이미지/영상은
+// 이 프레임 안에 들어갑니다 (자세한 이유는 위 CSS .slide-frame 주석 참고)
+const frameA = document.createElement('div');
+const frameB = document.createElement('div');
+frameA.className = 'slide-frame';
+frameB.className = 'slide-frame';
+layerA.appendChild(frameA);
+layerB.appendChild(frameB);
+
+let visibleLayer = layerA;
+let hiddenLayer = layerB;
+
+// ★ 대부분의 이미지가 만들어진 표준 캔버스 비율(가로/세로). 지금은 8:5 = 1.6 입니다.
+//   만약 나중에 표준 캔버스 비율 자체를 바꾸게 되면 이 숫자만 바꾸면 됩니다.
+const FRAME_RATIO = 1.6;
+
+function sizeSlideFrames(){
+  const containerW = stage.clientWidth;
+  const containerH = stage.clientHeight;
+  if(!containerW || !containerH) return;
+  let w, h;
+  if(containerW / containerH > FRAME_RATIO){
+    // 화면이 표준 비율보다 옆으로 더 넓음 → 프레임 높이를 화면 높이에 맞춤
+    h = containerH;
+    w = h * FRAME_RATIO;
+  } else {
+    // 화면이 표준 비율보다 세로로 더 김(좁음) → 프레임 너비를 화면 너비에 맞춤
+    w = containerW;
+    h = w / FRAME_RATIO;
+  }
+  frameA.style.width = w + 'px';
+  frameA.style.height = h + 'px';
+  frameB.style.width = w + 'px';
+  frameB.style.height = h + 'px';
+}
+
+sizeSlideFrames();
+window.addEventListener('resize', sizeSlideFrames);
+window.addEventListener('orientationchange', () => setTimeout(sizeSlideFrames, 60));
+
+
+// ============================================================
+// 이미지/영상 "가장자리 색" 자동 감지
+// ------------------------------------------------------------
+// 각 이미지/영상의 테두리(상하좌우 얇은 띠) 픽셀 색을 캔버스로 샘플링해서
+// 평균을 낸 뒤, 그 색을 레터박스(여백) 배경색으로 그대로 사용합니다.
+// 그 색이 어두우면 body에 'bg-dark' 클래스를 붙여서 상단 칩(NAME/EMAIL/INDEX)
+// 글자색을 --mute-ondark(더 밝은 그레이)로 자동 전환합니다.
+// 로컬 파일을 file:// 로 직접 열면 브라우저 보안 정책 때문에 캔버스에서
+// 픽셀을 못 읽어올 수 있는데, 그 경우 자동으로 흰색으로 대체되니 화면이
+// 깨지지는 않습니다. (서버로 열면 정상 동작)
+// ============================================================
+function sampleEdgeColor(mediaEl){
+  return new Promise((resolve) => {
+    try{
+      const w = 96, h = 96, border = 6;
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d', { willReadFrequently:true });
+      ctx.drawImage(mediaEl, 0, 0, w, h);
+      const data = ctx.getImageData(0, 0, w, h).data;
+      const rs = [], gs = [], bs = [];
+      for(let y=0; y<h; y++){
+        for(let x=0; x<w; x++){
+          const isEdge = x < border || x >= w-border || y < border || y >= h-border;
+          if(!isEdge) continue;
+          const idx = (y*w + x) * 4;
+          rs.push(data[idx]); gs.push(data[idx+1]); bs.push(data[idx+2]);
+        }
+      }
+      // 평균이 아니라 중앙값(median) 사용: 모서리에 작은 로고/디테일 같은
+      // 튀는 색 픽셀이 몇 개 섞여도 전체 색이 그쪽으로 쏠리지 않도록 함
+      const median = (arr) => {
+        const s = arr.slice().sort((a,b) => a-b);
+        const mid = Math.floor(s.length/2);
+        return s.length % 2 ? s[mid] : Math.round((s[mid-1] + s[mid]) / 2);
+      };
+      resolve({ r: median(rs), g: median(gs), b: median(bs) });
+    } catch(e){
+      resolve(null); // 픽셀을 못 읽는 경우 → 흰색으로 대체
+    }
+  });
+}
+
+function applyEdgeStyling(layerEl, mediaEl, isVideo){
+  const fallback = () => {
+    layerEl.style.backgroundColor = '#ffffff';
+    layerEl.dataset.dark = 'false';
+    if(layerEl.classList.contains('active')) document.body.classList.remove('bg-dark');
+  };
+  const run = () => {
+    sampleEdgeColor(mediaEl).then((color) => {
+      if(!color){ fallback(); return; }
+      const { r, g, b } = color;
+      layerEl.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+      const luminance = 0.299*r + 0.587*g + 0.114*b;
+      layerEl.dataset.dark = luminance < 128 ? 'true' : 'false';
+      // 이 레이어가 지금 화면에 보이는 중이면(레이어 스왑 전에 샘플링이 끝난 경우 등)
+      // 상단 칩 컬러도 바로 갱신
+      if(layerEl.classList.contains('active')){
+        document.body.classList.toggle('bg-dark', layerEl.dataset.dark === 'true');
+      }
+    });
+  };
+  if(isVideo){
+    if(mediaEl.readyState >= 2){ run(); }
+    else { mediaEl.addEventListener('loadeddata', run, { once:true }); }
+  } else {
+    if(mediaEl.complete && mediaEl.naturalWidth > 0){ run(); }
+    else { mediaEl.addEventListener('load', run, { once:true }); }
+  }
+}
+
+function fillLayer(layerEl, item){
+  const frameEl = layerEl.querySelector('.slide-frame');
+  frameEl.innerHTML = '';
+  layerEl.style.backgroundColor = '#fff'; // 실제 색이 샘플링되기 전까지의 기본값
+  layerEl.dataset.dark = 'false';
+  if(item.type === 'image'){
+    const img = document.createElement('img');
+    img.src = item.src;
+    img.alt = item.label || '';
+    frameEl.appendChild(img);
+    applyEdgeStyling(layerEl, img, false);
+  } else if(item.type === 'video'){
+    const vid = document.createElement('video');
+    vid.muted = forceUnmuteNextVideo ? false : muted;
+    forceUnmuteNextVideo = false; // 한 번 쓰고 나면 원래대로(다음 영상부터는 다시 음소거)
+    vid.playsInline = true;
+    vid.autoplay = true;
+    vid.loop = false;
+    vid.src = item.src;
+    frameEl.appendChild(vid);
+    applyEdgeStyling(layerEl, vid, true);
+
+    // 일부 브라우저에서 autoplay 속성만으로는 재생이 시작되지 않는 경우가 있어
+    // 메타데이터가 준비되는 대로 명시적으로 play()도 호출해준다.
+    const tryPlay = () => { vid.play().catch(() => {}); };
+    if(vid.readyState >= 1){ tryPlay(); } else { vid.addEventListener('loadeddata', tryPlay, { once:true }); }
+  } else {
+    // placeholder gradient (자체 생성, 외부 파일 요청 없음)
+    frameEl.style.background = `linear-gradient(135deg, ${item.grad[0]}, ${item.grad[1]})`;
+  }
+}
+
+// GROUPS: 같은 번호-숫자(예: 07-1/07-2)로 업로드된 항목은 항상 이 순서 그대로 연달아 재생됨.
+// 그룹 자체의 등장 순서는 셔플되지만, 그룹 내부 아이템 순서/연속성은 항상 고정됨.
+// ============================================================
+// 메인 화면(슬라이드쇼)에 어떤 이미지/영상을 띄울지 여기서 직접 관리합니다.
+// - 빼고 싶으면: 그 줄 맨 앞에 // 을 붙여 주석 처리하세요.
+// - 다시 넣고 싶으면: 맨 앞의 // 을 지우면 됩니다.
+// - 대괄호 안에 숫자가 2개([a,b])면 항상 그 순서로 붙어서 연달아 재생되는 페어입니다.
+// - 영상의 정지 이미지(썸네일 전용, 그리드에만 노출)는 메인에 절대 안 나오므로 이 목록에 없습니다.
+// ============================================================
+const GROUPS = [
+  [0],      // ROUGHTYPE — LOGOTYPE
+  [1],      // ROUGHTYPE — LOGOTYPE
+  [2],      // ROUGHTYPE — LOGOTYPE
+  [3],      // ROUGHTYPE — LOGOTYPE
+  [4],      // FARDEYA — LOGOTYPE
+  [5],      // FARDEYA — ILLUSTRATION
+  [6,7],    // LANEIGE BESPOKE — PACKAGING (+ PACKAGING, 항상 연달아 재생)
+  [8,9],    // LANEIGE — PACKAGING (+ PACKAGING)
+  [10],     // FROM JOY, WITH LOVE MV — LETTERING
+  [11],     // BERLIN PHOTOBOOK DISTRIBUTION — APPAREL GRAPHIC
+  [12],     // BEIDELLI — LOGOTYPE
+  [14],     // AUDEUM — MOTION POSTER (영상)
+  [15],     // BFK — LOGOTYPE
+  [16,17],  // BLOOMTIDE — LOGO CONSTRUCTION (+ LOGOTYPE & SYMBOL)
+  [18],     // RETURNITY — SYMBOL
+  [19],     // HIDDEN NY — APPAREL GRAPHIC
+  [20],     // HIDDEN NY — APPAREL GRAPHIC
+  [21],     // REDCAT — POSTER DESIGN
+  [22],     // REDCAT — POSTER DESIGN
+  [23],     // EVENT FLYER — POSTER DESIGN
+  [24],     // EVENT FLYER — POSTER DESIGN
+  [25],     // LOFI — TYPE DESIGN
+  [26],     // BFK — PATTERN GRAPHIC
+  [27],     // BFK — ZINE
+  [28],     // BFK — TOTE BAGS
+  [29],     // BERLIN PHOTOBOOK DISTRIBUTION — APPAREL GRAPHIC
+  //[30],     // EVENT FLYER — POSTER DESIGN
+  [31],     // ROBERTO ZUCCO — POSTER DESIGN
+  [32],     // NATION CURRENCY — GRAPHIC DESIGN
+  [34],     // OPENAI CREATIVE LAB SEOUL DOCUMENTARY — CREATIVE DIRECTION (영상)
+  [35],     // CORPOREAL THRESHOLD — FORM STUDY
+  [36],     // CORPOREAL THRESHOLD — FORM STUDY
+  [37,38],  // KRUCIALIZE — GRAPHIC DESIGN (+ WEBSITE DESIGN)
+  [39],     // EXERCISE / EXORCISE — ALBUM COVER
+  [40],     // KRUCIALIZE — GRAPHIC DESIGN
+  [42],     // EPIC NBA KINEMATIC DEMO — MOTION GRAPHIC (영상)
+  [43],     // PUPPET ISLAND — TYPE DESIGN
+  [44],     // TIJUANA FIGHTER 2 — ILLUSTRATION
+  [50],     // KILLERS OF THE FLOWER MOON — MOTION GRAPHIC (영상)
+  [53],     // GRIM FANDANGO — MOTION GRAPHIC (영상)
+];
+
+function shuffleArray(arr){
+  const a = arr.slice();
+  for(let i=a.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+
+// 그룹 단위로 셔플한 뒤, 각 그룹의 내부 아이템들을 순서대로 펼쳐서
+// 하나의 flat media-index 순서를 만든다 → 페어는 항상 붙어서 재생됨.
+function buildOrder(){
+  const shuffledGroups = shuffleArray(GROUPS);
+  const flat = [];
+  shuffledGroups.forEach(g => flat.push(...g));
+  return flat;
+}
+
+let order = buildOrder();
+let pos = 0;
+let current = -1;
+let preloadedNextIndex = null;
+
+function pickNextMediaIndex(){
+  if(pos >= order.length){
+    order = buildOrder();
+    pos = 0;
+  }
+  const idx = order[pos++];
+  if(idx === current) return pickNextMediaIndex();
+  return idx;
+}
+
+const captionEl = document.getElementById('caption-text');
+let captionTypeTimer = null;
+
+// ★ 타이핑 속도: 글자 한 개당 걸리는 시간(ms). 숫자를 낮추면 더 빠르게,
+//   높이면 더 천천히 타이핑됩니다.
+const CAPTION_TYPE_SPEED_MS = 32;
+
+// ★ 캡션 줄바꿈을 자동(폭 기준)이 아니라 직접 지정하고 싶으면,
+//   위 CAPTIONS 목록의 문구 안에 "\n" 을 넣으면 그 자리에서 줄이 바뀝니다.
+//   예) 33: "OPENAI CREATIVE LAB SEOUL\nDOCUMENTARY — CREATIVE DIRECTION",
+function setCaptionText(label){
+  clearTimeout(captionTypeTimer);
+  captionEl.innerHTML = '';
+
+  const lines = String(label).split('\n');
+  let lineSpan = document.createElement('span');
+  captionEl.appendChild(lineSpan);
+
+  let lineIndex = 0, charIndex = 0;
+
+  function typeNext(){
+    const line = lines[lineIndex] || '';
+    if(charIndex < line.length){
+      lineSpan.textContent += line[charIndex];
+      charIndex++;
+      captionTypeTimer = setTimeout(typeNext, CAPTION_TYPE_SPEED_MS);
+    } else if(lineIndex < lines.length - 1){
+      lineIndex++;
+      charIndex = 0;
+      captionEl.appendChild(document.createElement('br'));
+      lineSpan = document.createElement('span');
+      captionEl.appendChild(lineSpan);
+      captionTypeTimer = setTimeout(typeNext, CAPTION_TYPE_SPEED_MS);
+    }
+  }
+
+  typeNext();
+}
+
+function showNext(){
+  const nextIndex = preloadedNextIndex !== null ? preloadedNextIndex : pickNextMediaIndex();
+  current = nextIndex;
+
+  // swap visible/hidden layers (hiddenLayer already has this media preloaded)
+  visibleLayer.classList.remove('active');
+  hiddenLayer.classList.add('active');
+  [visibleLayer, hiddenLayer] = [hiddenLayer, visibleLayer];
+
+  // 새로 보이는 레이어의 가장자리 밝기에 맞춰 상단 칩(NAME/EMAIL/INDEX) 컬러 갱신
+  document.body.classList.toggle('bg-dark', visibleLayer.dataset.dark === 'true');
+
+  // free the media that just went off-screen (stop video, drop src → releases memory)
+  const oldVideo = hiddenLayer.querySelector('video');
+  if(oldVideo){
+    oldVideo.pause();
+    oldVideo.removeAttribute('src');
+    oldVideo.load();
+  }
+
+  setTimeout(() => {
+    setCaptionText(MEDIA[current].label || '');
+  }, 350);
+
+  // 페이드아웃이 완전히 끝난 뒤(1초 후)에만 다음-다음 이미지를 채워 넣음
+  // → 사라지는 중인 레이어 내용이 도중에 바뀌어 비쳐 보이는 현상 방지
+  const layerToFill = hiddenLayer;
+  setTimeout(() => {
+    preloadedNextIndex = pickNextMediaIndex();
+    fillLayer(layerToFill, MEDIA[preloadedNextIndex]);
+  }, 1050);
+
+  scheduleAdvance();
+}
+
+// 영상은 고정 시간이 아니라 실제 파일 길이(duration)만큼 재생한 뒤 다음으로 넘어가도록 예약.
+// (메타데이터 로드 전이면 임시 시간으로 예약해두고, 로드되면 실제 길이로 재예약)
+// ★ 그리드에서 직접 골라서 볼 때는 이미지가 기본(IMAGE_HOLD_MS)보다 더 오래
+//   보이도록 forcedImageHoldMs를 한 번만 적용합니다 (jumpTo 참고).
+let forcedImageHoldMs = null;
+
+function scheduleAdvance(){
+  clearTimeout(window.__advanceTimer);
+  const item = MEDIA[current];
+  const fallback = (item.type !== 'video' && forcedImageHoldMs) || item.holdMs || (item.type === 'video' ? VIDEO_FALLBACK_HOLD_MS : IMAGE_HOLD_MS);
+  forcedImageHoldMs = null; // 한 번 쓰고 나면 원래대로(다음 이미지부터는 기본 시간)
+
+  if(item.type === 'video'){
+    const videoEl = visibleLayer.querySelector('video');
+    const useActualDuration = () => {
+      clearTimeout(window.__advanceTimer);
+      const dur = videoEl.duration;
+      window.__advanceTimer = setTimeout(showNext, (dur && isFinite(dur) && dur > 0) ? dur * 1000 : fallback);
+    };
+    if(videoEl && videoEl.readyState >= 1){
+      useActualDuration();
+    } else if(videoEl){
+      window.__advanceTimer = setTimeout(showNext, fallback);
+      videoEl.addEventListener('loadedmetadata', useActualDuration, { once:true });
+    } else {
+      window.__advanceTimer = setTimeout(showNext, fallback);
+    }
+  } else {
+    window.__advanceTimer = setTimeout(showNext, fallback);
+  }
+}
+
+// bootstrap: load first two items, then start the cycle
+let muted = true;
+// ★ 그리드 썸네일을 클릭해서 바로 보는 영상은 이 플래그가 true일 때 한 번만
+//   음소거 해제되어 재생된다 (jumpTo 참고). 클릭이라는 사용자 동작이 있었기
+//   때문에 브라우저의 "소리 있는 자동재생 차단" 정책에 걸리지 않는다.
+let forceUnmuteNextVideo = false;
+current = pickNextMediaIndex();
+fillLayer(visibleLayer, MEDIA[current]);
+// 주의: 여기서 바로 'active'를 넣지 않는다 — 로딩화면이 걷히는 순간에 맞춰
+// 아래 reveal()에서 켜야 로딩화면→첫 이미지 전환이 자연스럽게 겹쳐 보인다.
+setCaptionText(MEDIA[current].label || '');
+preloadedNextIndex = pickNextMediaIndex();
+fillLayer(hiddenLayer, MEDIA[preloadedNextIndex]);
+scheduleAdvance();
+
+// 다음 화면으로 넘어가는 조건: (1) 첫 이미지/영상이 실제로 뜰 준비가 됐고,
+// (2) 로딩 애니메이션(삼각형)이 방금 한 바퀴(2.5초)를 깨끗하게 다 돌았을 것.
+// 이 둘을 모두 만족해야 다음으로 넘어간다. (1)이 늦어지면(로딩이 오래 걸리면)
+// 애니메이션은 2.5초 단위로 계속 자연스럽게 반복되다가, (1)이 끝난 직후 맞이하는
+// 첫 "한 바퀴 완료" 시점에 넘어간다 — 그래서 절대 회전 도중에 뚝 끊기지 않는다.
+let mediaReady = false;
+let spinsDone = false;
+
+// CSS 변수(ms)를 그대로 읽어와서 JS 타이밍도 자동으로 맞춘다.
+// → 위 :root의 --rotate-hint-fade / --rotate-hint-rotate 값만 바꾸면
+//   여기 코드는 안 건드려도 알아서 같이 조정된다.
+function cssTimeToMs(varName){
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+  if(raw.endsWith('ms')) return parseFloat(raw);
+  if(raw.endsWith('s')) return parseFloat(raw) * 1000;
+  return parseFloat(raw) || 0;
+}
+const ROTATE_HINT_FADE_MS = cssTimeToMs('--rotate-hint-fade');
+const ROTATE_HINT_ROTATE_MS = cssTimeToMs('--rotate-hint-rotate');
+
+function tryAdvance(){
+  if(!mediaReady || !spinsDone) return;
+
+  const isPortraitPhone = isPhoneViewport() && window.innerWidth < window.innerHeight;
+  if(isPortraitPhone){
+    // 세로로 들고 있던 폰: 삼각형을 슬쩍 지우고, "ROTATE" 문구를 제자리(0도)에서
+    // 천천히 나타낸 뒤, 실제 콘텐츠가 회전하는 것과 같은 방향(0→90도)으로 부드럽게
+    // 돌리고 나서 다음 화면으로 넘어간다.
+    loadingMark.classList.add('hide');
+    rotateHint.textContent = 'ROTATE';
+    rotateHint.classList.add('show');
+    setTimeout(() => {
+      rotateHint.classList.add('flatten');
+      setTimeout(finishLoading, ROTATE_HINT_ROTATE_MS + 50); // 회전 트랜지션 끝날 때까지 대기
+    }, ROTATE_HINT_FADE_MS + 200); // 페이드인 끝나고 잠깐 더 보여준 뒤 회전 시작
+  } else {
+    finishLoading();
+  }
+}
+
+function finishLoading(){
+  // 로딩화면(흰 배경 + 삼각형)을 먼저 페이드아웃 시키고, 그게 "완전히" 다 사라진
+  // 뒤에야 다음 이미지를 페이드인 시킨다 (동시에 크로스페이드되면 흰 화면과
+  // 이미지가 잠깐 겹쳐 보이는 문제가 있었음). 흰 화면 → (완전히 사라짐) → 이미지.
+  loadingScreen.classList.add('hidden');
+  setTimeout(() => {
+    visibleLayer.classList.add('active');
+    document.body.classList.toggle('bg-dark', visibleLayer.dataset.dark === 'true');
+  }, 700); // 위 #loading-screen의 opacity 트랜지션(.7s)이 다 끝난 뒤 시작
+}
+
+(function checkMediaReady(){
+  const firstMedia = visibleLayer.querySelector('img, video');
+  if(!firstMedia){ mediaReady = true; return; }
+  const isReady = firstMedia.tagName === 'VIDEO' ? firstMedia.readyState >= 2 : firstMedia.complete;
+  if(isReady){
+    mediaReady = true;
+  } else {
+    firstMedia.addEventListener(firstMedia.tagName === 'VIDEO' ? 'loadeddata' : 'load', () => { mediaReady = true; }, { once:true });
+    setTimeout(() => { mediaReady = true; }, 2500); // 안전장치
+  }
+})();
+
+// 삼각형 애니메이션은 2.5초마다 한 바퀴씩 무한 반복된다. 매번 한 바퀴가 끝날 때
+// (animationiteration) 미디어가 준비됐는지 확인해서, 준비됐으면 그 깨끗한 시점에
+// 넘어가고, 아직이면 다음 바퀴에서 다시 확인한다 — 그래서 로딩이 길어지면
+// 애니메이션이 자연스럽게 계속 반복된다.
+document.getElementById('loading-triangle').addEventListener('animationiteration', () => {
+  spinsDone = true;
+  tryAdvance();
+});
+
+// ---------- INDEX: fullscreen thumbnail grid ----------
+const indexBtn = document.getElementById('index-btn');
+const gridOverlay = document.getElementById('grid-overlay');
+const gridContainer = document.getElementById('grid-container');
+const gridLoading = document.getElementById('grid-loading');
+let gridBuilt = false;
+let gridOpen = false;
+
+// ============================================================
+// 인덱스 그리드에 뜨는 이미지와 순서를 여기서 직접 관리합니다.
+// - 순서를 바꾸려면: 숫자들의 줄 위치만 바꾸면 됩니다.
+// - 그리드에서 빼고 싶으면: 그 줄 맨 앞에 // 을 붙여 주석 처리하세요.
+// - 다시 넣고 싶으면: 맨 앞의 // 을 지우면 됩니다.
+// (영상 항목은 정지 이미지로 그리드에 노출되므로 영상 자체 인덱스는 목록에 없습니다)
+//
+// ★ 그리드 썸네일을 눌렀을 때 "영상"이 재생되게 만드는 방법 (이미 3개 적용돼 있음:
+//   AUDEUM/OPENAI/EPIC NBA 항목):
+//   1) 위쪽 media-data(JSON)에 그 항목의 정지 이미지에 "gridOnly":true 와
+//      "linkedIndex": (영상 항목의 배열 인덱스 번호) 를 추가
+//   2) 바로 그 영상 항목(예: {"type":"video","src":"videos/파일명.mp4", ...})을
+//      media-data 아무 곳에나 추가 (그리드에는 안 뜨고, 위 이미지를 통해서만 재생됨)
+//   3) 지금 당장 실제 영상 파일이 없으면, 이미 올라가 있는 다른 영상 파일 경로를
+//      "src"에 임시로 넣어두고(placeholder), 나중에 진짜 영상 파일을 videos/ 폴더에
+//      올린 뒤 그 파일명으로 "src" 값만 바꿔주면 됩니다 — 코드는 안 건드려도 됩니다.
+// ============================================================
+const GRID_ORDER = [
+  // 0,  // ROUGHTYPE — LOGOTYPE
+  1,     // ROUGHTYPE — LOGOTYPE
+  2,     // ROUGHTYPE — LOGOTYPE
+  // 3,  // ROUGHTYPE — LOGOTYPE
+  4,     // FARDEYA — LOGOTYPE
+  5,     // FARDEYA — ILLUSTRATION
+  18,    // RETURNITY — SYMBOL
+  // 6,  // LANEIGE BESPOKE — PACKAGING
+  7,     // LANEIGE BESPOKE — PACKAGING
+  8,     // LANEIGE — PACKAGING
+  // 9,  // LANEIGE — PACKAGING
+  10,    // FROM JOY, WITH LOVE MV — LETTERING
+  29,    // BERLIN PHOTOBOOK DISTRIBUTION — APPAREL GRAPHIC
+  27,    // BFK — ZINE
+  33,    // OPENAI CREATIVE LAB SEOUL DOCUMENTARY — CREATIVE DIRECTION
+  13,    // AUDEUM — MOTION POSTER
+  15,    // BFK — LOGOTYPE
+  28,    // BFK — TOTE BAGS
+  // 26, // BFK — PATTERN GRAPHIC
+  16,    // BLOOMTIDE — SYMBOL
+  // 17, // BLOOMTIDE — SYMBOL
+  21,    // REDCAT — POSTER DESIGN
+  22,    // REDCAT — POSTER DESIGN
+  12,    // BEIDELLI — LOGOTYPE
+  11,    // BERLIN PHOTOBOOK DISTRIBUTION — APPAREL GRAPHIC
+  31,    // ROBERTO ZUCCO — POSTER DESIGN
+  37,    // KRUCIALIZE — GRAPHIC DESIGN
+  //38, // KRUCIALIZE — WEBSITE DESIGN
+  //39,    // KRUCIALIZE — GRAPHIC DESIGN
+  40,    // EXERCISE / EXORCISE — ALBUM COVER
+  19,    // HIDDEN NY — APPAREL GRAPHIC
+  // 20, // HIDDEN NY — APPAREL GRAPHIC
+  //30,    // EVENT FLYER — POSTER DESIGN
+  32,    // NATION CURRENCY — GRAPHIC DESIGN
+  25,    // LOFI — TYPE DESIGN
+  //35,    // CORPOREAL THRESHOLD — FORM STUDY
+  36,    // CORPOREAL THRESHOLD — FORM STUDY
+  23,    // EVENT FLYER — POSTER DESIGN
+  24,    // EVENT FLYER — POSTER DESIGN
+  //41,    // EPIC NBA KINEMATIC DEMO — MOTION GRAPHIC
+  43,    // PUPPET ISLAND — TYPE DESIGN
+  //44,    // TIJUANA FIGHTER 2 — ILLUSTRATION
+  48,    // KILLERS OF THE FLOWER MOON — MOTION GRAPHIC (클릭하면 풀영상 재생)
+  51,    // GRIM FANDANGO — MOTION GRAPHIC (클릭하면 풀영상 재생)
+];
+
+function buildGridOnce(){
+  if(gridBuilt) return Promise.resolve();
+  const loadPromises = [];
+  // 완성된 썸네일들을 실제 grid-container가 아니라 이 fragment에 임시로 모아뒀다가,
+  // 전부 준비된 뒤 한 번에 넣는다 → 하나씩 순서대로 나타나지 않고 한꺼번에 나타남.
+  const fragment = document.createDocumentFragment();
+
+  GRID_ORDER.forEach((i) => {
+    const item = MEDIA[i];
+    if(!item) return;
+
+    const thumb = document.createElement('div');
+    thumb.className = 'grid-thumb';
+
+    if(item.type === 'image'){
+      const img = document.createElement('img');
+      img.alt = item.label || '';
+      img.src = item.src;
+      thumb.appendChild(img);
+      if(!img.complete){
+        loadPromises.push(new Promise((resolve) => {
+          img.addEventListener('load', resolve, { once:true });
+          img.addEventListener('error', resolve, { once:true });
+        }));
+      }
+    } else {
+      thumb.style.background = item.grad
+        ? `linear-gradient(135deg, ${item.grad[0]}, ${item.grad[1]})`
+        : '#141414';
+    }
+
+    if(item.label){
+      const label = document.createElement('div');
+      label.className = 'grid-label';
+      label.textContent = item.label;
+      thumb.appendChild(label);
+    }
+
+    thumb.addEventListener('click', () => {
+      closeGrid();
+      // gridOnly 썸네일(예: 영상의 정지 이미지)은 실제로는 연결된 영상으로 점프
+      jumpTo(item.linkedIndex !== undefined ? item.linkedIndex : i);
+    });
+
+    fragment.appendChild(thumb);
+  });
+  gridBuilt = true;
+
+  // ★ 안전장치: 썸네일 로딩이 아무리 오래 걸려도 이 시간(3초) 이상은 기다리지
+  //   않고 그냥 넘어갑니다. 숫자를 바꾸면 최대 대기 시간을 조절할 수 있습니다.
+  const safety = new Promise((resolve) => setTimeout(resolve, 3000));
+  return Promise.race([Promise.all(loadPromises), safety]).then(() => {
+    gridContainer.appendChild(fragment); // 전부 준비된 뒤 한 번에 반영
+  });
+}
+
+function jumpTo(index){
+  clearTimeout(window.__advanceTimer);
+  const item = MEDIA[index];
+
+  // 그리드에서 클릭한 순간, 다음에 보일 레이어(hiddenLayer)에는 이전에 무작위로
+  // 미리 채워둔 "엉뚱한 다음 아이템"이 들어있을 수 있으므로, 지금 클릭한 대상으로
+  // 명시적으로 다시 채워 넣는다. 영상이면 방금 클릭(사용자 동작)이 있었으니
+  // 음소거 없이 소리와 함께 재생되도록 한다.
+  forceUnmuteNextVideo = (item.type === 'video');
+  fillLayer(hiddenLayer, item);
+
+  preloadedNextIndex = index;
+  // re-sync shuffle position so upcoming order doesn't immediately repeat this item
+  pos = order.indexOf(index);
+  // 그리드에서 골라서 보는 이미지는 기본보다 더 오래 보여준다 (영상은 실제 길이 재생이라 무관)
+  forcedImageHoldMs = GRID_SELECT_HOLD_MS;
+  showNext();
+}
+
+function openGrid(){
+  gridOpen = true;
+  clearTimeout(window.__advanceTimer);
+  gridOverlay.classList.add('open');
+  document.body.classList.add('grid-open');
+  indexBtn.textContent = '✕';
+  indexBtn.classList.add('is-close');
+  indexBtn.setAttribute('aria-label', 'Close index');
+  indexBtn.setAttribute('aria-pressed', 'true');
+
+  // 지금 메인 화면에서 영상이 재생 중이면, 인덱스를 보는 동안은 일시정지해둔다
+  // (닫을 때 다시 이어서 재생됨 — closeGrid 참고)
+  const playingVideo = visibleLayer.querySelector('video');
+  if(playingVideo){ playingVideo.pause(); }
+
+  if(gridBuilt){
+    // 이미 한 번 로드된 적 있으면(브라우저 캐시) 로딩 모션 없이 바로 보여준다.
+    return;
+  }
+
+  // 처음 여는 경우: 로딩이 있으면(썸네일이 아직 준비 안 됐으면) 바로 로딩 모션을
+  // 보여준다. 단, 한 번 재생되기 시작하면 회전하는 모습이 확실히 눈에 보일 때까지는
+  // 사라지지 않도록 최소 노출시간을 보장한다.
+  // (실측해보니 "90도 지점까지"로 딱 맞춰뒀던 이전 계산은 여유가 거의 없어서,
+  //  실제로는 회전이 보이기 직전에 사라지는 경우가 많았음 → 첫 회전 구간이 완전히
+  //  끝나는 지점보다 더 뒤로 넉넉하게 잡음)
+  const spinnerShownAt = performance.now();
+  const minSpinnerMs = cssTimeToMs('--loading-spin-duration') * 0.35;
+
+  // 첫 화면에서 쓴 것과 같은 삼각형+글자 로딩 모션을 그대로 재활용(복제)해서 보여준다.
+  const spinnerClone = loadingMark.cloneNode(true);
+  spinnerClone.removeAttribute('id');
+  spinnerClone.classList.remove('hide');
+  spinnerClone.classList.add('spinner-mark');
+  const cloneTriangle = spinnerClone.querySelector('#loading-triangle');
+  if(cloneTriangle){
+    cloneTriangle.removeAttribute('id');
+    cloneTriangle.classList.add('spinner-triangle');
+  }
+  // ★ 원래 키프레임은 앞 1/6이 "정지" 구간이라, 그대로 재생하면 처음엔 안 도는
+  //   것처럼 보인다. 음수 animation-delay를 줘서 이미 정지 구간을 지나 막 회전이
+  //   시작되는 지점부터 재생되도록 스킵한다 (삼각형/글자 전부 동일하게 적용해서
+  //   서로 어긋나지 않고 계속 싱크가 맞음).
+  const skipMs = cssTimeToMs('--loading-spin-duration') * (1/6);
+  spinnerClone.querySelectorAll('#loading-triangle, .spinner-triangle, .orbit-spin, .counter-spin')
+    .forEach((el) => { el.style.animationDelay = `-${skipMs}ms`; });
+  gridLoading.appendChild(spinnerClone);
+  gridLoading.classList.add('show');
+
+  buildGridOnce().then(() => {
+    const elapsed = performance.now() - spinnerShownAt;
+    const remaining = Math.max(0, minSpinnerMs - elapsed);
+    setTimeout(() => {
+      gridLoading.classList.remove('show');
+      gridLoading.innerHTML = '';
+    }, remaining);
+  });
+}
+
+function closeGrid(){
+  gridOpen = false;
+  gridOverlay.classList.remove('open');
+  document.body.classList.remove('grid-open');
+  indexBtn.textContent = 'INDEX';
+  indexBtn.classList.remove('is-close');
+  indexBtn.setAttribute('aria-label', 'Open index');
+  indexBtn.setAttribute('aria-pressed', 'false');
+
+  clearTimeout(window.__advanceTimer);
+  const item = MEDIA[current];
+  const pausedVideo = visibleLayer.querySelector('video');
+
+  if(item.type === 'video' && pausedVideo){
+    // 인덱스를 여는 동안 일시정지해뒀던 영상을 다시 이어서 재생하고,
+    // (처음부터 다시가 아니라) 남은 재생 시간만큼만 다음 전환을 재예약한다.
+    pausedVideo.play().catch(() => {});
+    const dur = pausedVideo.duration;
+    const remainingMs = (dur && isFinite(dur) && dur > 0)
+      ? Math.max(0, (dur - pausedVideo.currentTime) * 1000)
+      : VIDEO_FALLBACK_HOLD_MS;
+    window.__advanceTimer = setTimeout(showNext, remainingMs);
+  } else {
+    const holdMs = item.holdMs || (item.type === 'video' ? VIDEO_FALLBACK_HOLD_MS : IMAGE_HOLD_MS);
+    window.__advanceTimer = setTimeout(showNext, holdMs);
+  }
+}
+
+indexBtn.addEventListener('click', () => {
+  gridOpen ? closeGrid() : openGrid();
+});
+
+// ---------- subtle film grain (ambient motion, matches film/video subject) ----------
+const canvas = document.getElementById('grain');
+const ctx = canvas.getContext('2d');
+function resizeGrain(){
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeGrain();
+window.addEventListener('resize', resizeGrain);
+
+const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+function drawGrain(){
+  const w = canvas.width, h = canvas.height;
+  const imgData = ctx.createImageData(w, h);
+  const buffer = new Uint32Array(imgData.data.buffer);
+  for(let i=0;i<buffer.length;i++){
+    const v = (Math.random()*255)|0;
+    buffer[i] = (255<<24) | (v<<16) | (v<<8) | v;
+  }
+  ctx.putImageData(imgData, 0, 0);
+}
+if(!prefersReduced){
+  drawGrain();
+  setInterval(drawGrain, 120);
+} else {
+  canvas.style.display = 'none';
+}
+}, 0);
+</script>
+</body>
+</html>
