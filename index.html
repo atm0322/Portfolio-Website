@@ -578,7 +578,12 @@
   {"type":"image","src":"images/45-grim-fandango.jpg","label":"GRIM FANDANGO — MOTION","grid":true,"gridOnly":true,"linkedIndex":52},
   {"type":"video","src":"videos/full-grim-fandango.mp4","label":"GRIM FANDANGO — MOTION"},
   {"type":"video","src":"videos/grim-fandango.mp4","label":"GRIM FANDANGO — MOTION"},
-  {"type":"image","src":"images/46-love-splash.jpg","label":"LOVE SPLASH MV — TITLE DESIGN","grid":true}
+  {"type":"image","src":"images/46-love-splash.jpg","label":"LOVE SPLASH MV — TITLE DESIGN","grid":true},
+  {"type":"video","src":"videos/full-people-in-the-street.mp4","label":"PEOPLE IN THE STREET - VIDEO WORK"},
+  {"type":"video","src":"videos/people-in-the-street.mp4","label":"PEOPLE IN THE STREET - VIDEO WORK"},
+  {"type":"image","src":"images/47-people-in-the-street.jpg","label":"PEOPLE IN THE STREET - VIDEO WORK","grid":true,"gridOnly":true,"linkedIndex":55},
+  {"type":"image","src":"images/04-fardeya-logotype-2.jpg","label":"FARDEYA — WORDMARK","grid":true}
+
 ]
 </script>
 
@@ -712,7 +717,9 @@ const CAPTIONS = {
   44: "TIJUANA FIGHTER 2 — ILLUSTRATION",
   50: "KILLERS OF THE FLOWER MOON — MOTION GRAPHIC",
   53: "GRIM FANDANGO — MOTION GRAPHIC",
-  54: "LOVE SPLASH - TITLE DESIGN"
+  54: "LOVE SPLASH - TITLE DESIGN",
+  55: "PEOPLE IN THE STREET - VIDEO WORK",
+  58: "FARDEYA — LOGOTYPE"
 };
 MEDIA.forEach((item, i) => { if(CAPTIONS[i] !== undefined) item.label = CAPTIONS[i]; });
 
@@ -890,7 +897,7 @@ const GROUPS = [
   [1],      // ROUGHTYPE — LOGOTYPE
   [2],      // ROUGHTYPE — LOGOTYPE
   [3],      // ROUGHTYPE — LOGOTYPE
-  [4],      // FARDEYA — LOGOTYPE
+  [4,58],   // FARDEYA — LOGOTYPE (+ LOGOTYPE, 항상 연달아 재생)
   [5],      // FARDEYA — ILLUSTRATION
   [6,7],    // LANEIGE BESPOKE — PACKAGING (+ PACKAGING, 항상 연달아 재생)
   [8,9],    // LANEIGE — PACKAGING (+ PACKAGING)
@@ -927,6 +934,7 @@ const GROUPS = [
   [50],     // KILLERS OF THE FLOWER MOON — MOTION GRAPHIC (영상)
   [53],     // GRIM FANDANGO — MOTION GRAPHIC (영상)
   [54],     // LOVE SPLASH - TITLE DESIGN
+  [56],     // PEOPLE IN THE STREET - VIDEO WORK
 ];
 
 function shuffleArray(arr){
@@ -1239,6 +1247,7 @@ const GRID_ORDER = [
   2,     // ROUGHTYPE — LOGOTYPE
   // 3,  // ROUGHTYPE — LOGOTYPE
   4,     // FARDEYA — LOGOTYPE
+  // 58,    //FARDEYA — LOGOTYPE
   5,     // FARDEYA — ILLUSTRATION
   18,    // RETURNITY — SYMBOL
   // 6,  // LANEIGE BESPOKE — PACKAGING
@@ -1254,12 +1263,12 @@ const GRID_ORDER = [
   28,    // BFK — TOTE BAGS
   // 26, // BFK — PATTERN GRAPHIC
   16,    // BLOOMTIDE — SYMBOL
-  // 17, // BLOOMTIDE — SYMBOL
-  21,    // REDCAT — POSTER DESIGN
-  22,    // REDCAT — POSTER DESIGN
+  //17, // BLOOMTIDE — SYMBOL
+  31,    // ROBERTO ZUCCO — POSTER DESIGN
   12,    // BEIDELLI — LOGOTYPE
   11,    // BERLIN PHOTOBOOK DISTRIBUTION — APPAREL GRAPHIC
-  31,    // ROBERTO ZUCCO — POSTER DESIGN
+  21,    // REDCAT — POSTER DESIGN
+  22,    // REDCAT — POSTER DESIGN
   37,    // KRUCIALIZE — GRAPHIC DESIGN
   //38, // KRUCIALIZE — WEBSITE DESIGN
   //39,    // KRUCIALIZE — GRAPHIC DESIGN
@@ -1269,16 +1278,18 @@ const GRID_ORDER = [
   // 20, // HIDDEN NY — APPAREL GRAPHIC
   //30,    // EVENT FLYER — POSTER DESIGN
   32,    // NATION CURRENCY — GRAPHIC DESIGN
-  25,    // LOFI — TYPE DESIGN
+  43,    // PUPPET ISLAND — TYPE DESIGN
   //35,    // CORPOREAL THRESHOLD — FORM STUDY
   36,    // CORPOREAL THRESHOLD — FORM STUDY
+  25,    // LOFI — TYPE DESIGN
   23,    // EVENT FLYER — POSTER DESIGN
   24,    // EVENT FLYER — POSTER DESIGN
-  //41,    // EPIC NBA KINEMATIC DEMO — MOTION GRAPHIC
-  43,    // PUPPET ISLAND — TYPE DESIGN
+  41,    // EPIC NBA KINEMATIC DEMO — MOTION GRAPHIC
   //44,    // TIJUANA FIGHTER 2 — ILLUSTRATION
   48,    // KILLERS OF THE FLOWER MOON — MOTION GRAPHIC (클릭하면 풀영상 재생)
   51,    // GRIM FANDANGO — MOTION GRAPHIC (클릭하면 풀영상 재생)
+  57,    // PEOPLE IN THE STREET - VIDEO WORK (클릭하면 풀영상 재생)
+  
 ];
 
 function buildGridOnce(){
