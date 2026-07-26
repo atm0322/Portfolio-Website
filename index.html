@@ -30,9 +30,10 @@
     --mute-ondark: #b8b6b0;
 
     /* ★ 로딩화면 삼각형/글자 회전 속도 조절: 이 숫자 하나만 바꾸면 됩니다.
-       한 바퀴(360도) 도는 데 걸리는 시간이고, 로딩이 이 시간보다 오래 걸리면
-       (미디어가 아직 준비 안 됐으면) 자연스럽게 계속 반복해서 돕니다. */
-    --loading-spin-duration: 3.2s;
+       120도(=한 스텝) 도는 데 걸리는 시간입니다 (정지 구간 포함). 한 바퀴(360도)는
+       이 시간의 3배가 걸립니다. 로딩이 오래 걸리면(미디어가 아직 준비 안 됐으면)
+       자연스럽게 계속 반복해서 돕니다. */
+    --loading-spin-duration: 1.0667s;
 
     /* ★ 모바일 "ROTATE" 문구 속도 조절: 이 두 값만 바꾸면 됩니다.
        --rotate-hint-fade   : 문구가 서서히 나타나는(사라지는) 시간
@@ -184,10 +185,11 @@
        화면에서 차지하는 비중이 작아졌습니다.
      - 페이지가 열리자마자 바로 애니메이션이 시작됩니다 (더 이상 대기/일시정지 없음).
      - 삼각형은 반시계(왼쪽), 글자(T/A/N)는 시계 방향으로 서로 반대로 120도씩
-       회전/공전합니다. 각 구간은 "제자리 정지 → 회전" 순서이고, 한 바퀴(2.5초)를
-       무한 반복합니다. 로딩이 오래 걸리면 그만큼 계속 반복해서 돌다가, 미디어가
-       준비된 직후 맞이하는 첫 "한 바퀴 완료" 시점에 다음 페이지로 넘어갑니다
-       (아래 JS의 animationiteration 리스너 참고). */
+       회전/공전합니다. 각 스텝(120도)은 "제자리 정지 → 회전" 순서이고, 무한
+       반복합니다. 기본적으로 최소 2스텝(240도)은 돈 뒤 다음 페이지로 넘어가고,
+       로딩이 오래 걸리면 그만큼 계속 반복해서 돌다가 미디어가 준비된 직후
+       맞이하는 스텝 완료 시점에 넘어갑니다 (아래 JS의 animationiteration
+       리스너, MIN_LOADING_STEPS 참고). */
   #loading-mark, .spinner-mark{
     position:relative;
     width:200px; height:200px;
@@ -266,35 +268,26 @@
     animation: letterOrbitCCW var(--loading-spin-duration) linear infinite;
   }
 
-  /* ★ 한 바퀴(--loading-spin-duration, 기본 2.5초)를 3구간(각 33.33%)으로 나눠서,
-     각 구간은 앞 절반 정지, 뒤 절반 동안 120도 회전합니다. infinite라 이 사이클이
-     끝없이 반복되고, 로딩이 오래 걸리면 그만큼 자연스럽게 계속 돕니다. */
+  /* ★ 정삼각형은 120도마다 모양이 원래와 똑같아 보이는 특성을 이용해서, 애니메이션
+     사이클 자체를 "120도 회전 1스텝"으로 정의했습니다 (예전엔 360도=3스텝이 한
+     사이클이었음). 그래서 이제 animationiteration 이벤트가 120도 회전마다(=한
+     스텝마다) 한 번씩 발생하고, JS에서 "몇 스텝(=몇 x120도) 돌았는지"를 정확히
+     셀 수 있습니다. 앞 절반은 정지, 뒤 절반 동안 120도 회전. infinite라 로딩이
+     오래 걸리면 계속 반복됩니다. */
   @keyframes triSpin{
-    0%     { transform:rotate(0deg); }
-    16.67% { transform:rotate(0deg); }
-    33.33% { transform:rotate(-120deg); }
-    50%    { transform:rotate(-120deg); }
-    66.67% { transform:rotate(-240deg); }
-    83.33% { transform:rotate(-240deg); }
-    100%   { transform:rotate(-360deg); }
+    0%   { transform:rotate(0deg); }
+    50%  { transform:rotate(0deg); }
+    100% { transform:rotate(-120deg); }
   }
   @keyframes letterOrbitCW{
-    0%     { transform:rotate(0deg); }
-    16.67% { transform:rotate(0deg); }
-    33.33% { transform:rotate(120deg); }
-    50%    { transform:rotate(120deg); }
-    66.67% { transform:rotate(240deg); }
-    83.33% { transform:rotate(240deg); }
-    100%   { transform:rotate(360deg); }
+    0%   { transform:rotate(0deg); }
+    50%  { transform:rotate(0deg); }
+    100% { transform:rotate(120deg); }
   }
   @keyframes letterOrbitCCW{
-    0%     { transform:rotate(0deg); }
-    16.67% { transform:rotate(0deg); }
-    33.33% { transform:rotate(-120deg); }
-    50%    { transform:rotate(-120deg); }
-    66.67% { transform:rotate(-240deg); }
-    83.33% { transform:rotate(-240deg); }
-    100%   { transform:rotate(-360deg); }
+    0%   { transform:rotate(0deg); }
+    50%  { transform:rotate(0deg); }
+    100% { transform:rotate(-120deg); }
   }
   @keyframes fadeInName{
     to{ opacity:1; }
@@ -582,7 +575,8 @@
   {"type":"video","src":"videos/full-people-in-the-street.mp4","label":"PEOPLE IN THE STREET - VIDEO WORK"},
   {"type":"video","src":"videos/people-in-the-street.mp4","label":"PEOPLE IN THE STREET - VIDEO WORK"},
   {"type":"image","src":"images/47-people-in-the-street.jpg","label":"PEOPLE IN THE STREET - VIDEO WORK","grid":true,"gridOnly":true,"linkedIndex":55},
-  {"type":"image","src":"images/04-fardeya-logotype-2.jpg","label":"FARDEYA — WORDMARK","grid":true}
+  {"type":"image","src":"images/04-fardeya-logotype-2.jpg","label":"FARDEYA — WORDMARK","grid":true},
+  {"type":"image","src":"images/48-daangn-icon.jpg","label":"DAANGN — ICONOGRAPHY","grid":true}
 
 ]
 </script>
@@ -608,7 +602,7 @@
    ------------------------------------------------------------
    폰(가로/세로 상관없이 짧은 쪽 화면이 640px 이하)일 때만:
    1) 삼각형 + T/A/N 회전 모노그램이 뜨는 로딩 화면을 (방향 상관없이 똑바로 선 채로)
-      2.5초에 한 바퀴씩 계속 반복해서 보여주다가 (로딩이 오래 걸리면 그만큼 반복)
+      최소 240도(2스텝)는 계속 반복해서 보여주다가 (로딩이 오래 걸리면 그만큼 반복)
    2) 세로로 들고 있었다면, 미디어 준비 완료 후 맞는 첫 "한 바퀴 완료" 시점에
       "ROTATE" 문구가 0도→90도로 돌아가며 화면이 곧 가로로 바뀐다는 걸 알려주고
    3) 실제 콘텐츠(#rotate-wrapper)는 항상 가로형으로 보이도록 함
@@ -719,7 +713,8 @@ const CAPTIONS = {
   53: "GRIM FANDANGO — MOTION GRAPHIC",
   54: "LOVE SPLASH - TITLE DESIGN",
   55: "PEOPLE IN THE STREET - VIDEO WORK",
-  58: "FARDEYA — LOGOTYPE"
+  58: "FARDEYA — LOGOTYPE",
+  59: "DAANGN — ICONOGRAPHY"
 };
 MEDIA.forEach((item, i) => { if(CAPTIONS[i] !== undefined) item.label = CAPTIONS[i]; });
 
@@ -935,6 +930,7 @@ const GROUPS = [
   [53],     // GRIM FANDANGO — MOTION GRAPHIC (영상)
   [54],     // LOVE SPLASH - TITLE DESIGN
   [56],     // PEOPLE IN THE STREET - VIDEO WORK
+  [59],     // DAANGN — ICONOGRAPHY
 ];
 
 function shuffleArray(arr){
@@ -991,6 +987,16 @@ function buildOrder(){
 }
 
 let order = buildOrder();
+// ★ 웹사이트를 처음 열었을 때 첫 슬라이드는 무조건 이미지여야 한다 (영상이 먼저
+//   뜨는 일이 없도록). 셔플 로직상 이미 영상은 이미지들 사이에만 끼워 넣지만,
+//   혹시를 대비해 한 번 더 명시적으로 확인해서 맨 앞이 영상이면 뒤쪽의 이미지와
+//   자리를 바꿔둔다.
+if(MEDIA[order[0]] && MEDIA[order[0]].type === 'video'){
+  const firstImagePos = order.findIndex((idx) => MEDIA[idx] && MEDIA[idx].type !== 'video');
+  if(firstImagePos > 0){
+    [order[0], order[firstImagePos]] = [order[firstImagePos], order[0]];
+  }
+}
 let pos = 0;
 let current = -1;
 let preloadedNextIndex = null;
@@ -1145,10 +1151,17 @@ fillLayer(hiddenLayer, MEDIA[preloadedNextIndex]);
 scheduleAdvance();
 
 // 다음 화면으로 넘어가는 조건: (1) 첫 이미지/영상이 실제로 뜰 준비가 됐고,
-// (2) 로딩 애니메이션(삼각형)이 방금 한 바퀴(2.5초)를 깨끗하게 다 돌았을 것.
+// (2) 로딩 애니메이션(삼각형)이 최소 MIN_LOADING_STEPS번(120도씩) 돌았을 것.
 // 이 둘을 모두 만족해야 다음으로 넘어간다. (1)이 늦어지면(로딩이 오래 걸리면)
-// 애니메이션은 2.5초 단위로 계속 자연스럽게 반복되다가, (1)이 끝난 직후 맞이하는
-// 첫 "한 바퀴 완료" 시점에 넘어간다 — 그래서 절대 회전 도중에 뚝 끊기지 않는다.
+// 애니메이션은 120도 단위로 계속 자연스럽게 반복되다가, (1)이 끝난 직후 맞이하는
+// 첫 "스텝 완료" 시점에 넘어간다 — 그래서 절대 회전 도중에 뚝 끊기지 않는다.
+//
+// ★ 기본 노출량 조절: 이 숫자만 바꾸면 됩니다. 1스텝 = 120도.
+//   지금 값(2)은 기본 240도(2스텝) 회전한 뒤 넘어간다는 뜻입니다.
+//   로딩이 이보다 오래 걸리면, 다 될 때까지 자연스럽게 계속 반복됩니다(상한 없음).
+const MIN_LOADING_STEPS = 2;
+let stepCount = 0;
+
 let mediaReady = false;
 let spinsDone = false;
 
@@ -1207,12 +1220,14 @@ function finishLoading(){
   }
 })();
 
-// 삼각형 애니메이션은 2.5초마다 한 바퀴씩 무한 반복된다. 매번 한 바퀴가 끝날 때
-// (animationiteration) 미디어가 준비됐는지 확인해서, 준비됐으면 그 깨끗한 시점에
-// 넘어가고, 아직이면 다음 바퀴에서 다시 확인한다 — 그래서 로딩이 길어지면
-// 애니메이션이 자연스럽게 계속 반복된다.
+// 삼각형 애니메이션은 이제 120도(한 스텝)마다 한 번씩 무한 반복된다. 매 스텝이
+// 끝날 때(animationiteration) 최소 노출 스텝 수(MIN_LOADING_STEPS)를 채웠는지,
+// 그리고 미디어가 준비됐는지 확인해서 둘 다 만족하면 그 깨끗한 시점에 넘어간다.
 document.getElementById('loading-triangle').addEventListener('animationiteration', () => {
-  spinsDone = true;
+  stepCount++;
+  if(stepCount >= MIN_LOADING_STEPS){
+    spinsDone = true;
+  }
   tryAdvance();
 });
 
@@ -1276,6 +1291,7 @@ const GRID_ORDER = [
   40,    // EXERCISE / EXORCISE — ALBUM COVER
   19,    // HIDDEN NY — APPAREL GRAPHIC
   // 20, // HIDDEN NY — APPAREL GRAPHIC
+  59,    // DAANGN — ICONOGRAPHY
   //30,    // EVENT FLYER — POSTER DESIGN
   32,    // NATION CURRENCY — GRAPHIC DESIGN
   43,    // PUPPET ISLAND — TYPE DESIGN
@@ -1394,7 +1410,7 @@ function openGrid(){
   //  실제로는 회전이 보이기 직전에 사라지는 경우가 많았음 → 첫 회전 구간이 완전히
   //  끝나는 지점보다 더 뒤로 넉넉하게 잡음)
   const spinnerShownAt = performance.now();
-  const minSpinnerMs = cssTimeToMs('--loading-spin-duration') * 0.35;
+  const minSpinnerMs = cssTimeToMs('--loading-spin-duration') * 1.05;
 
   // 첫 화면에서 쓴 것과 같은 삼각형+글자 로딩 모션을 그대로 재활용(복제)해서 보여준다.
   const spinnerClone = loadingMark.cloneNode(true);
@@ -1406,11 +1422,11 @@ function openGrid(){
     cloneTriangle.removeAttribute('id');
     cloneTriangle.classList.add('spinner-triangle');
   }
-  // ★ 원래 키프레임은 앞 1/6이 "정지" 구간이라, 그대로 재생하면 처음엔 안 도는
+  // ★ 키프레임은 앞 절반이 "정지" 구간이라, 그대로 재생하면 처음엔 안 도는
   //   것처럼 보인다. 음수 animation-delay를 줘서 이미 정지 구간을 지나 막 회전이
   //   시작되는 지점부터 재생되도록 스킵한다 (삼각형/글자 전부 동일하게 적용해서
   //   서로 어긋나지 않고 계속 싱크가 맞음).
-  const skipMs = cssTimeToMs('--loading-spin-duration') * (1/6);
+  const skipMs = cssTimeToMs('--loading-spin-duration') * 0.5;
   spinnerClone.querySelectorAll('#loading-triangle, .spinner-triangle, .orbit-spin, .counter-spin')
     .forEach((el) => { el.style.animationDelay = `-${skipMs}ms`; });
   gridLoading.appendChild(spinnerClone);
