@@ -932,12 +932,47 @@ function shuffleArray(arr){
   return a;
 }
 
+// ★ 영상은 재생 시간이 이미지보다 훨씬 길어서, 그냥 무작위로 섞으면(운 나쁘면 영상이
+//   연달아 나오거나 자주 몰릴 수 있음) 실제 체감상 이미지보다 훨씬 자주 나오는
+//   것처럼 느껴집니다. 그래서 영상 그룹만 따로 빼서 이미지 사이사이에 "최소 이만큼은
+//   띄워서" 고르게 분산시켜 넣습니다.
+// 이 숫자를 늘리면 영상 사이 간격이 더 벌어져서(=영상이 더 뜸하게 나옴) 이미지
+// 빈도가 상대적으로 더 높아집니다.
+const MIN_IMAGES_BETWEEN_VIDEOS = 8;
+
+function groupHasVideo(group){
+  return group.some((idx) => MEDIA[idx] && MEDIA[idx].type === 'video');
+}
+
 // 그룹 단위로 셔플한 뒤, 각 그룹의 내부 아이템들을 순서대로 펼쳐서
 // 하나의 flat media-index 순서를 만든다 → 페어는 항상 붙어서 재생됨.
+// 영상 그룹은 이미지 그룹들 사이에 최소 간격(MIN_IMAGES_BETWEEN_VIDEOS)을 두고
+// 고르게 끼워 넣어서, 무작위 셔플만으로 영상이 몰리거나 너무 잦아지지 않게 한다.
 function buildOrder(){
-  const shuffledGroups = shuffleArray(GROUPS);
+  const imageGroups = shuffleArray(GROUPS.filter(g => !groupHasVideo(g)));
+  const videoGroups = shuffleArray(GROUPS.filter(g => groupHasVideo(g)));
+
   const flat = [];
-  shuffledGroups.forEach(g => flat.push(...g));
+  let vIdx = 0;
+  let sinceLastVideo = MIN_IMAGES_BETWEEN_VIDEOS; // 맨 처음에도 바로 영상부터 시작하지 않도록
+
+  imageGroups.forEach((g) => {
+    flat.push(...g);
+    sinceLastVideo += g.length;
+
+    // 다음 영상 하나를 끼워 넣을 자리인지 확인 (간격이 충분히 벌어졌을 때만)
+    if(vIdx < videoGroups.length && sinceLastVideo >= MIN_IMAGES_BETWEEN_VIDEOS){
+      flat.push(...videoGroups[vIdx]);
+      vIdx++;
+      sinceLastVideo = 0;
+    }
+  });
+  // 혹시 다 못 끼워 넣은 영상이 남아있으면 맨 뒤에 이어 붙인다
+  while(vIdx < videoGroups.length){
+    flat.push(...videoGroups[vIdx]);
+    vIdx++;
+  }
+
   return flat;
 }
 
@@ -1044,16 +1079,34 @@ function scheduleAdvance(){
 
   if(item.type === 'video'){
     const videoEl = visibleLayer.querySelector('video');
-    const useActualDuration = () => {
-      clearTimeout(window.__advanceTimer);
-      const dur = videoEl.duration;
-      window.__advanceTimer = setTimeout(showNext, (dur && isFinite(dur) && dur > 0) ? dur * 1000 : fallback);
-    };
-    if(videoEl && videoEl.readyState >= 1){
-      useActualDuration();
-    } else if(videoEl){
-      window.__advanceTimer = setTimeout(showNext, fallback);
-      videoEl.addEventListener('loadedmetadata', useActualDuration, { once:true });
+    if(videoEl){
+      // ★ 영상이 끝나면(예정된 시간을 계산해서 기다리는 게 아니라) 실제 'ended'
+      //   이벤트가 발생하는 그 순간 바로 다음으로 넘어간다. 이전에는 duration 값을
+      //   미리 계산해서 그 시간만큼 setTimeout으로 기다렸는데, 실제 재생이 끝나는
+      //   시점과 계산된 시간 사이에 미세한 오차가 있어서 마지막 프레임에서 잠깐
+      //   멈춰있다가 넘어가는 것처럼 보였다.
+      let advanced = false;
+      const goNext = () => {
+        if(advanced) return;
+        advanced = true;
+        clearTimeout(window.__advanceTimer);
+        showNext();
+      };
+      videoEl.addEventListener('ended', goNext, { once:true });
+
+      // 안전장치: 'ended'가 어떤 이유로든(재생 실패 등) 발생하지 않을 경우를 대비해,
+      // 실제 길이(+약간의 여유)만큼 뒤에 강제로 넘어가도록 예약해둔다.
+      const armSafetyTimer = () => {
+        const dur = videoEl.duration;
+        const ms = (dur && isFinite(dur) && dur > 0) ? dur * 1000 + 800 : fallback;
+        window.__advanceTimer = setTimeout(goNext, ms);
+      };
+      if(videoEl.readyState >= 1){
+        armSafetyTimer();
+      } else {
+        window.__advanceTimer = setTimeout(goNext, fallback);
+        videoEl.addEventListener('loadedmetadata', armSafetyTimer, { once:true });
+      }
     } else {
       window.__advanceTimer = setTimeout(showNext, fallback);
     }
