@@ -1008,7 +1008,7 @@ function shuffleArray(arr){
 //   띄워서" 고르게 분산시켜 넣습니다.
 // 이 숫자를 늘리면 영상 사이 간격이 더 벌어져서(=영상이 더 뜸하게 나옴) 이미지
 // 빈도가 상대적으로 더 높아집니다.
-const MIN_IMAGES_BETWEEN_VIDEOS = 5;
+const MIN_IMAGES_BETWEEN_VIDEOS = 10;
 
 function groupHasVideo(group){
   return group.some((idx) => MEDIA[idx] && MEDIA[idx].type === 'video');
