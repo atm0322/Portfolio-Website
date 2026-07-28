@@ -20,14 +20,18 @@
     /* ★ 우측 하단 캡션이 줄바꿈되는 최대 폭. 이 숫자만 바꾸면 됩니다 (px 단위).
        숫자를 늘리면 한 줄에 더 많은 글자가 들어가고(줄바꿈이 늦게 됨),
        줄이면 더 일찍 줄바꿈됩니다. */
-    --caption-max-width: 420px;
+    --caption-max-width: 620px;
 
-    /* ★ 상단 칩(NAME/EMAIL/INDEX) 글자색.
+    /* ★ 상단 칩(NAME/EMAIL/INDEX/캡션) 글자색.
        --mute-onlight: 이미지 가장자리가 밝을 때(흰 배경 등) 쓰는 그레이
        --mute-ondark : 이미지 가장자리가 어두울 때(검은 배경 등) 쓰는 더 밝은 그레이
        현재 보이는 이미지의 가장자리 색을 자동으로 감지해서 이 둘 사이를 전환합니다. */
     --mute-onlight: #898989;
     --mute-ondark: #b8b6b0;
+
+    /* ★ NAME처럼 진하게 강조되는 글자색 (위 --mute와 같은 방식으로 자동 전환) */
+    --ink-onlight: #1b1b1b;
+    --ink-ondark: #f2f0ec;
 
     /* ★ 로딩화면 삼각형/글자 회전 속도 조절: 이 숫자 하나만 바꾸면 됩니다.
        120도(=한 스텝) 도는 데 걸리는 시간입니다 (정지 구간 포함). 한 바퀴(360도)는
@@ -41,8 +45,8 @@
     --rotate-hint-fade: 0.6s;
     --rotate-hint-rotate: 1s;
   }
-  body.bg-dark{ --mute: var(--mute-ondark); }
-  body:not(.bg-dark){ --mute: var(--mute-onlight); }
+  body.bg-dark{ --mute: var(--mute-ondark); --ink: var(--ink-ondark); }
+  body:not(.bg-dark){ --mute: var(--mute-onlight); --ink: var(--ink-onlight); }
   *{ margin:0; padding:0; box-sizing:border-box; }
   html,body{
     width:100%; height:100%;
@@ -97,6 +101,13 @@
     outline:none;
     filter:saturate(1.02);
   }
+  /* ★ 모바일(회전된 상태)에서는 레터박스 없이 화면을 꽉 채우도록 프레임을
+     전체 화면 크기로 채우고(JS의 sizeSlideFrames 참고), 이미지/영상은
+     contain 대신 cover로 채워서 빈 여백 없이 꽉 차게(대신 살짝 잘릴 수 있음). */
+  body.is-phone .slide img,
+  body.is-phone .slide video{
+    object-fit:cover;
+  }
   #grain{
     position:absolute; inset:0; z-index:6; pointer-events:none;
     opacity:0.05; mix-blend-mode:overlay;
@@ -121,7 +132,7 @@
     line-height:1;
   }
   #identity-name{
-    color:#1b1b1b;
+    color:var(--ink);
     text-transform:uppercase;
   }
   #identity-name a{
@@ -330,15 +341,22 @@
 
   /* ---------- BOTTOM RIGHT: CAPTION ---------- */
   #index{
-    position:absolute; bottom:28px; right:28px; z-index:30;
-    max-width:min(46vw, var(--caption-max-width));
+    position:absolute; bottom:20px; right:28px; z-index:30;
+    max-width:min(65vw, var(--caption-max-width));
     font-size:11px; letter-spacing:0.08em;
     text-align:right;
     pointer-events:none;
+    /* 버튼(#index-btn)보다 더 밝은 배경 + 각진 느낌에 가까운 미세한 라운드 박스 */
+    background:rgba(255,255,255,0.55);
+    backdrop-filter:blur(22px) saturate(180%);
+    -webkit-backdrop-filter:blur(22px) saturate(180%);
+    border-radius:4px;
+    padding:9px 14px;
+    isolation:isolate;
   }
   #caption-text{
     display:inline-block;
-    color:#c9c9c4;
+    color:var(--mute);
     /* 단어(하이픈으로 연결된 프로젝트명 등) 중간에서 애매하게 끊기지 않도록 */
     word-break:keep-all;
     overflow-wrap:normal;
@@ -449,7 +467,11 @@
     #identity-row{ top:16px; left:16px; gap:6px; }
     #identity-name, #identity-email{ padding:11px 14px; }
     #identity-name, #identity-email{ font-size:11px; }
-    #index{ font-size:10.5px; bottom:16px; right:16px; }
+    /* ★ 모바일은 콘텐츠가 90도 회전되어 있어서, 실제로 옆으로 넓게 쓸 수 있는
+       공간은 화면 너비(vw)가 아니라 화면 높이(vh) 기준입니다. 그동안 vw 기준
+       그대로 쓰여서 실제보다 훨씬 좁게 잡혀 있었던 게 캡션이 이상하게 줄바꿈되던
+       원인입니다. */
+    #index{ font-size:10.5px; bottom:10px; right:16px; max-width:min(85vh, var(--caption-max-width)); }
     #index-btn{ top:16px; right:16px; padding:7px 11px; font-size:10px; }
   }
 
@@ -627,13 +649,26 @@ function isPhoneViewport(){
   return Math.min(window.innerWidth, window.innerHeight) <= 640;
 }
 
+// ★ 모바일 상하단(또는 좌우) 여백 문제 수정: window.innerWidth/innerHeight는 모바일
+//   브라우저의 주소창/툴바가 나타났다 사라졌다 하는 동안 실제 화면 크기와 살짝
+//   어긋날 때가 있다. visualViewport가 있으면 그걸 우선 쓰고(더 정확함), 없으면
+//   기존 방식으로 대체한다.
+function getViewportSize(){
+  if(window.visualViewport){
+    return { w: window.visualViewport.width, h: window.visualViewport.height };
+  }
+  return { w: window.innerWidth, h: window.innerHeight };
+}
+
 function applyRotation(){
+  document.body.classList.toggle('is-phone', isPhoneViewport());
+
   if(!isPhoneViewport()){
     rotateWrapper.style.cssText = 'position:fixed; inset:0;';
+    if(typeof sizeSlideFrames === 'function') sizeSlideFrames();
     return;
   }
-  const w = window.innerWidth;
-  const h = window.innerHeight;
+  const { w, h } = getViewportSize();
   rotateWrapper.style.position = 'fixed';
   rotateWrapper.style.top = '50%';
   rotateWrapper.style.left = '50%';
@@ -648,11 +683,19 @@ function applyRotation(){
     rotateWrapper.style.height = h + 'px';
     rotateWrapper.style.transform = 'translate(-50%, -50%)';
   }
+  if(typeof sizeSlideFrames === 'function') sizeSlideFrames();
 }
 
 applyRotation();
 window.addEventListener('resize', applyRotation);
 window.addEventListener('orientationchange', () => setTimeout(applyRotation, 60));
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize', applyRotation);
+}
+// 모바일 브라우저의 주소창/툴바가 뒤늦게 나타났다 사라지며 실제 화면 크기가
+// 처음 측정값과 달라지는 경우가 있어, 페이지가 자리 잡은 뒤 한 번 더 재적용한다.
+setTimeout(applyRotation, 300);
+setTimeout(applyRotation, 1000);
 
 // 무거운 초기화(거대한 MEDIA 데이터 파싱 및 렌더 준비)를 다음 tick으로 미뤄서,
 // 브라우저가 그 전에 로딩 화면을 최소 한 번은 화면에 그릴 수 있게 함 → 흰 화면만 뜨는 문제 방지
@@ -753,6 +796,17 @@ function sizeSlideFrames(){
   const containerW = stage.clientWidth;
   const containerH = stage.clientHeight;
   if(!containerW || !containerH) return;
+
+  if(isPhoneViewport()){
+    // 모바일(회전된 상태): 8:5 비율 제약 없이 화면 전체를 프레임으로 채운다
+    // (레터박스/여백 없음 — 대신 이미지는 object-fit:cover로 살짝 크롭될 수 있음)
+    frameA.style.width = '100%';
+    frameA.style.height = '100%';
+    frameB.style.width = '100%';
+    frameB.style.height = '100%';
+    return;
+  }
+
   let w, h;
   if(containerW / containerH > FRAME_RATIO){
     // 화면이 표준 비율보다 옆으로 더 넓음 → 프레임 높이를 화면 높이에 맞춤
@@ -866,12 +920,15 @@ function fillLayer(layerEl, item){
     vid.loop = false;
     vid.src = item.src;
     frameEl.appendChild(vid);
-    applyEdgeStyling(layerEl, vid, true);
 
-    // 일부 브라우저에서 autoplay 속성만으로는 재생이 시작되지 않는 경우가 있어
-    // 메타데이터가 준비되는 대로 명시적으로 play()도 호출해준다.
+    // ★ 재생 시작을 최우선으로: 가장자리 색 추출(캔버스 작업)보다 먼저 play()를
+    //   호출해야 한다. 순서가 바뀌면(색 추출이 먼저 등록되면) 그 캔버스 연산이
+    //   끝날 때까지 play() 호출이 미뤄져서, 특히 모바일에서 영상이 살짝 늦게
+    //   시작되는 것처럼 보였다.
     const tryPlay = () => { vid.play().catch(() => {}); };
     if(vid.readyState >= 1){ tryPlay(); } else { vid.addEventListener('loadeddata', tryPlay, { once:true }); }
+
+    applyEdgeStyling(layerEl, vid, true);
   } else {
     // placeholder gradient (자체 생성, 외부 파일 요청 없음)
     frameEl.style.background = `linear-gradient(135deg, ${item.grad[0]}, ${item.grad[1]})`;
@@ -1376,8 +1433,16 @@ function jumpTo(index){
   fillLayer(hiddenLayer, item);
 
   preloadedNextIndex = index;
-  // re-sync shuffle position so upcoming order doesn't immediately repeat this item
-  pos = order.indexOf(index);
+  // ★ "한 바퀴 다 돌기 전엔 같은 이미지가 다시 안 나오게" 하는 순환 순서를
+  //   그리드 클릭이 망가뜨리지 않도록: 클릭한 항목이 아직 순번(order)에 남아있으면
+  //   그 자리에서 제거하고(이미 지금 보여줬으니), 그 뒤에 있던 항목들이 밀리지
+  //   않도록 pos도 같이 보정한다. 이러면 아직 안 나온 다른 이미지들은 전부
+  //   원래 예정대로 이번 사이클 안에 한 번씩 나온다.
+  const existingPos = order.indexOf(index);
+  if(existingPos !== -1){
+    order.splice(existingPos, 1);
+    if(existingPos < pos) pos--;
+  }
   // 그리드에서 골라서 보는 이미지는 기본보다 더 오래 보여준다 (영상은 실제 길이 재생이라 무관)
   forcedImageHoldMs = GRID_SELECT_HOLD_MS;
   showNext();
