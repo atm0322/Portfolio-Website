@@ -449,7 +449,11 @@
     #identity-row{ top:16px; left:16px; gap:6px; }
     #identity-name, #identity-email{ padding:11px 14px; }
     #identity-name, #identity-email{ font-size:11px; }
-    #index{ font-size:10.5px; bottom:16px; right:16px; }
+    /* ★ 모바일은 콘텐츠가 90도 회전되어 있어서, 실제로 옆으로 넓게 쓸 수 있는
+       공간은 화면 너비(vw)가 아니라 화면 높이(vh) 기준입니다. 그동안 vw 기준
+       그대로 쓰여서 실제보다 훨씬 좁게 잡혀 있었던 게 캡션이 이상하게 줄바꿈되던
+       원인입니다. */
+    #index{ font-size:10.5px; bottom:16px; right:16px; max-width:min(70vh, var(--caption-max-width)); }
     #index-btn{ top:16px; right:16px; padding:7px 11px; font-size:10px; }
   }
 
@@ -627,13 +631,23 @@ function isPhoneViewport(){
   return Math.min(window.innerWidth, window.innerHeight) <= 640;
 }
 
+// ★ 모바일 상하단(또는 좌우) 여백 문제 수정: window.innerWidth/innerHeight는 모바일
+//   브라우저의 주소창/툴바가 나타났다 사라졌다 하는 동안 실제 화면 크기와 살짝
+//   어긋날 때가 있다. visualViewport가 있으면 그걸 우선 쓰고(더 정확함), 없으면
+//   기존 방식으로 대체한다.
+function getViewportSize(){
+  if(window.visualViewport){
+    return { w: window.visualViewport.width, h: window.visualViewport.height };
+  }
+  return { w: window.innerWidth, h: window.innerHeight };
+}
+
 function applyRotation(){
   if(!isPhoneViewport()){
     rotateWrapper.style.cssText = 'position:fixed; inset:0;';
     return;
   }
-  const w = window.innerWidth;
-  const h = window.innerHeight;
+  const { w, h } = getViewportSize();
   rotateWrapper.style.position = 'fixed';
   rotateWrapper.style.top = '50%';
   rotateWrapper.style.left = '50%';
@@ -653,6 +667,13 @@ function applyRotation(){
 applyRotation();
 window.addEventListener('resize', applyRotation);
 window.addEventListener('orientationchange', () => setTimeout(applyRotation, 60));
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize', applyRotation);
+}
+// 모바일 브라우저의 주소창/툴바가 뒤늦게 나타났다 사라지며 실제 화면 크기가
+// 처음 측정값과 달라지는 경우가 있어, 페이지가 자리 잡은 뒤 한 번 더 재적용한다.
+setTimeout(applyRotation, 300);
+setTimeout(applyRotation, 1000);
 
 // 무거운 초기화(거대한 MEDIA 데이터 파싱 및 렌더 준비)를 다음 tick으로 미뤄서,
 // 브라우저가 그 전에 로딩 화면을 최소 한 번은 화면에 그릴 수 있게 함 → 흰 화면만 뜨는 문제 방지
@@ -866,12 +887,15 @@ function fillLayer(layerEl, item){
     vid.loop = false;
     vid.src = item.src;
     frameEl.appendChild(vid);
-    applyEdgeStyling(layerEl, vid, true);
 
-    // 일부 브라우저에서 autoplay 속성만으로는 재생이 시작되지 않는 경우가 있어
-    // 메타데이터가 준비되는 대로 명시적으로 play()도 호출해준다.
+    // ★ 재생 시작을 최우선으로: 가장자리 색 추출(캔버스 작업)보다 먼저 play()를
+    //   호출해야 한다. 순서가 바뀌면(색 추출이 먼저 등록되면) 그 캔버스 연산이
+    //   끝날 때까지 play() 호출이 미뤄져서, 특히 모바일에서 영상이 살짝 늦게
+    //   시작되는 것처럼 보였다.
     const tryPlay = () => { vid.play().catch(() => {}); };
     if(vid.readyState >= 1){ tryPlay(); } else { vid.addEventListener('loadeddata', tryPlay, { once:true }); }
+
+    applyEdgeStyling(layerEl, vid, true);
   } else {
     // placeholder gradient (자체 생성, 외부 파일 요청 없음)
     frameEl.style.background = `linear-gradient(135deg, ${item.grad[0]}, ${item.grad[1]})`;
