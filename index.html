@@ -628,7 +628,7 @@
 const loadingScreen = document.getElementById('loading-screen');
 const rotateHint = document.getElementById('rotate-hint');
 // ★ 이미지 한 장이 화면에 얼마나 오래 떠있을지는 이 숫자로 조절하세요 (단위: 밀리초)
-const IMAGE_HOLD_MS = 2800;
+const IMAGE_HOLD_MS = 2000;
 // ★ 인덱스 그리드에서 직접 골라서 볼 때는 이 시간만큼 (기본 IMAGE_HOLD_MS보다 길게)
 //   보여준 뒤 다음 이미지로 넘어갑니다. 숫자만 바꾸면 조절됩니다.
 const GRID_SELECT_HOLD_MS = 5000;
@@ -906,8 +906,20 @@ function fillLayer(layerEl, item){
     applyEdgeStyling(layerEl, img, false);
   } else if(item.type === 'video'){
     const vid = document.createElement('video');
-    vid.muted = forceUnmuteNextVideo ? false : muted;
+    const shouldMute = forceUnmuteNextVideo ? false : muted;
     forceUnmuteNextVideo = false; // 한 번 쓰고 나면 원래대로(다음 영상부터는 다시 음소거)
+
+    // ★ 모바일(특히 iOS Safari)에서 자동재생이 막히고 재생 버튼이 뜨던 문제 수정:
+    //   .muted / .playsInline을 JS 프로퍼티로만 설정하면 iOS가 "진짜로 음소거된
+    //   채로 시작하는 영상"이라고 인식 못 하는 경우가 있다. iOS는 HTML 속성
+    //   (attribute) 존재 여부를 자동재생 허용 판단 기준으로 쓰기 때문에, 속성도
+    //   반드시 같이 명시하고, src를 지정하기 "전에" 먼저 설정해야 한다.
+    if(shouldMute){
+      vid.setAttribute('muted', '');
+    }
+    vid.setAttribute('playsinline', '');
+    vid.setAttribute('webkit-playsinline', ''); // 구형 iOS 대비
+    vid.muted = shouldMute;
     vid.playsInline = true;
     vid.autoplay = true;
     vid.loop = false;
@@ -1008,7 +1020,7 @@ function shuffleArray(arr){
 //   띄워서" 고르게 분산시켜 넣습니다.
 // 이 숫자를 늘리면 영상 사이 간격이 더 벌어져서(=영상이 더 뜸하게 나옴) 이미지
 // 빈도가 상대적으로 더 높아집니다.
-const MIN_IMAGES_BETWEEN_VIDEOS = 10;
+const MIN_IMAGES_BETWEEN_VIDEOS = 12;
 
 function groupHasVideo(group){
   return group.some((idx) => MEDIA[idx] && MEDIA[idx].type === 'video');
