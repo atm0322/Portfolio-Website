@@ -919,12 +919,15 @@ function fillLayer(layerEl, item){
     }
     vid.setAttribute('playsinline', '');
     vid.setAttribute('webkit-playsinline', ''); // 구형 iOS 대비
+    vid.setAttribute('autoplay', '');
     vid.muted = shouldMute;
     vid.playsInline = true;
     vid.autoplay = true;
     vid.loop = false;
+    vid.preload = 'auto';
     vid.src = item.src;
     frameEl.appendChild(vid);
+    vid.load(); // 사파리는 src만 지정하고 바로 play()를 부르면 재생을 안 받아주는 경우가 있어, 명시적으로 로드를 먼저 요청한다.
 
     // ★ 재생 시작을 최우선으로: 가장자리 색 추출(캔버스 작업)보다 먼저 play()를
     //   호출해야 한다. 순서가 바뀌면(색 추출이 먼저 등록되면) 그 캔버스 연산이
@@ -937,7 +940,17 @@ function fillLayer(layerEl, item){
     //   조용히 재생을 막아버릴 수 있다 (화면엔 흰 화면만 남고 아무 에러도 안 뜸).
     //   그래서 항상 지금 이 자리에서 동기적으로 먼저 한 번 시도하고, 아직 데이터가
     //   부족해서 실패했을 경우에만 loadeddata에서 한 번 더 재시도한다.
-    const tryPlay = () => { vid.play().catch(() => {}); };
+    // ★ 사파리 대비: play()가 프라미스를 거부하는 경우 짧은 지연 후 한 번 더
+    //   재시도한다 (사파리는 가끔 첫 시도에서 아직 준비가 덜 된 상태로 거부했다가
+    //   바로 다음엔 성공하는 경우가 있다).
+    const tryPlay = () => {
+      const p = vid.play();
+      if(p && p.catch){
+        p.catch(() => {
+          setTimeout(() => { vid.play().catch(() => {}); }, 150);
+        });
+      }
+    };
     tryPlay();
     if(vid.readyState < 1){
       vid.addEventListener('loadeddata', tryPlay, { once:true });
