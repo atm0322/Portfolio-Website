@@ -1201,11 +1201,29 @@ function showNext(){
     setCaptionText(MEDIA[current].label || '');
   }, 350);
 
+  // ★ 모바일 저속 네트워크 대응: 다음-다음에 보여줄 항목을 지금 미리 정해두고,
+  //   실제 화면용 <img>/<video> 요소를 만들기 전에 브라우저 캐시부터 미리
+  //   데워둔다 (백그라운드로 즉시 다운로드 시작 — 화면에는 아직 안 넣으니
+  //   깜빡임 없음). 영상은 파일이 훨씬 커서 미리 받아둘수록 효과가 크다 —
+  //   그래야 실제로 그 영상 차례가 됐을 때 처음 몇 초간 멈춰있는(=버퍼링) 것
+  //   처럼 보이는 현상이 줄어든다.
+  preloadedNextIndex = pickNextMediaIndex();
+  const nextItem = MEDIA[preloadedNextIndex];
+  if(nextItem && nextItem.type === 'image'){
+    const warmup = new Image();
+    warmup.src = nextItem.src;
+  } else if(nextItem && nextItem.type === 'video'){
+    const warmup = document.createElement('video');
+    warmup.preload = 'auto';
+    warmup.muted = true;
+    warmup.src = nextItem.src;
+    warmup.load(); // DOM에는 안 넣고 다운로드/버퍼링만 백그라운드로 미리 시작
+  }
+
   // 페이드아웃이 완전히 끝난 뒤(1초 후)에만 다음-다음 이미지를 채워 넣음
   // → 사라지는 중인 레이어 내용이 도중에 바뀌어 비쳐 보이는 현상 방지
   const layerToFill = hiddenLayer;
   setTimeout(() => {
-    preloadedNextIndex = pickNextMediaIndex();
     fillLayer(layerToFill, MEDIA[preloadedNextIndex]);
   }, 1050);
 
@@ -1287,8 +1305,41 @@ function scheduleAdvance(){
       window.__advanceTimer = setTimeout(showNext, fallback);
     }
   } else {
-    window.__advanceTimer = setTimeout(showNext, fallback);
+    window.__advanceTimer = setTimeout(() => advanceWhenNextImageReady(), fallback);
   }
+}
+
+// ★ 모바일 저속 네트워크 대응: 예정된 시간이 됐다고 바로 전환하지 않고, 다음에
+//   보여줄 이미지가 실제로 로딩(디코딩)까지 끝났는지 확인한다. 아직이면 아주
+//   짧게(0.15초) 재확인을 반복하다가 준비되면 그때 전환한다 — 그래야 이미지가
+//   덜 뜬 채로 크로스페이드가 시작돼서 "뒤엣것이 훅 튀어나오고 앞엣것만 서서히
+//   사라지는" 것처럼 보이던 현상이 없어진다. 혹시 몰라 최대 3초까지만 기다리고,
+//   그래도 안 끝났으면 그냥 진행한다(무한정 멈춰있지 않도록).
+// ★ 모바일 저속 네트워크 대응: 예정된 시간이 됐다고 바로 전환하지 않고, 다음에
+//   보여줄 이미지/영상이 실제로 충분히 준비됐는지 확인한다. 아직이면 아주
+//   짧게(0.15초) 재확인을 반복하다가 준비되면 그때 전환한다 — 그래야 콘텐츠가
+//   덜 뜬 채로 크로스페이드가 시작돼서 "뒤엣것이 훅 튀어나오고 앞엣것만 서서히
+//   사라지는" 것처럼 보이거나, 영상이 넘어가자마자 처음 몇 초간 멈춰있는 것처럼
+//   보이던 현상이 없어진다. 혹시 몰라 최대 3초까지만 기다리고, 그래도 준비가
+//   안 됐으면 그냥 진행한다(무한정 멈춰있지 않도록).
+function advanceWhenNextImageReady(retriesLeft){
+  if(retriesLeft === undefined) retriesLeft = 20; // 20 * 150ms ≈ 최대 3초 추가 대기
+  const nextItem = MEDIA[preloadedNextIndex];
+  if(nextItem && nextItem.type === 'image'){
+    const img = hiddenLayer.querySelector('img');
+    if(img && !img.complete && retriesLeft > 0){
+      window.__advanceTimer = setTimeout(() => advanceWhenNextImageReady(retriesLeft - 1), 150);
+      return;
+    }
+  } else if(nextItem && nextItem.type === 'video'){
+    const vid = hiddenLayer.querySelector('video');
+    // readyState 3(HAVE_FUTURE_DATA) 이상이면 끊김 없이 재생을 시작할 만큼 버퍼링된 상태
+    if(vid && vid.readyState < 3 && retriesLeft > 0){
+      window.__advanceTimer = setTimeout(() => advanceWhenNextImageReady(retriesLeft - 1), 150);
+      return;
+    }
+  }
+  showNext();
 }
 
 // bootstrap: load first two items, then start the cycle
