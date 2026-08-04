@@ -893,6 +893,44 @@ function applyEdgeStyling(layerEl, mediaEl, isVideo){
   }
 }
 
+// ★ 사파리 대비: 아직 화면에 보이지 않는(opacity:0) 상태에서 걸었던 최초 play()
+//   시도가 무시됐을 가능성이 있어서, 레이어가 실제로 화면에 보이게(active) 되는
+//   바로 그 순간에 그 안의 영상에 play()를 한 번 더 시도해주는 헬퍼.
+//   ★ 모바일(회전된 레이아웃) 대비: 회전 transform이 적용된 직후 바로 play()를
+//   부르면 iOS가 레이아웃이 아직 자리잡기 전이라고 판단해 무시할 수 있어서,
+//   두 번의 requestAnimationFrame(=최소 한 프레임 이상의 레이아웃/페인트가 끝난
+//   뒤)만큼 미뤘다가 시도한다.
+function retriggerVideoPlay(layerEl){
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const vid = layerEl.querySelector('video');
+      if(vid && vid.paused){
+        vid.play().catch(() => {});
+      }
+    });
+  });
+}
+
+// ★ 모바일 사파리(iOS) 최후 안전장치: 프로그래밍적인 자동재생이 iOS 정책상
+//   막혀있더라도, 사용자가 화면 어디든 한 번이라도 터치/클릭하면 그건 명백한
+//   사용자 동작이므로 그 순간 지금 화면에 보이는 영상이 멈춰있다면 다시 재생을
+//   시도한다. 몇 번만 시도해보고 성공하면(=영상이 실제로 재생 중이면) 더 이상
+//   리스너를 걸어두지 않는다.
+let __unlockAttempts = 0;
+function unlockVideoOnFirstTouch(){
+  __unlockAttempts++;
+  const vid = document.querySelector('.slide.active video');
+  if(vid && vid.paused){
+    vid.play().catch(() => {});
+  }
+  if(__unlockAttempts >= 5){
+    document.removeEventListener('touchstart', unlockVideoOnFirstTouch);
+    document.removeEventListener('click', unlockVideoOnFirstTouch);
+  }
+}
+document.addEventListener('touchstart', unlockVideoOnFirstTouch, { passive:true });
+document.addEventListener('click', unlockVideoOnFirstTouch);
+
 function fillLayer(layerEl, item){
   const frameEl = layerEl.querySelector('.slide-frame');
   frameEl.innerHTML = '';
@@ -1142,6 +1180,10 @@ function showNext(){
   // swap visible/hidden layers (hiddenLayer already has this media preloaded)
   visibleLayer.classList.remove('active');
   hiddenLayer.classList.add('active');
+  // ★ 사파리 대비: 영상은 opacity:0인 상태(아직 화면에 안 보일 때)에서 걸었던
+  //   play() 호출이 무시될 수 있다. 지금 막 실제로 화면에 보이게(active) 된
+  //   순간에 그 안의 영상이 있으면 play()를 한 번 더 재시도한다.
+  retriggerVideoPlay(hiddenLayer);
   [visibleLayer, hiddenLayer] = [hiddenLayer, visibleLayer];
 
   // 새로 보이는 레이어의 가장자리 밝기에 맞춰 상단 칩(NAME/EMAIL/INDEX) 컬러 갱신
@@ -1256,6 +1298,12 @@ let muted = true;
 //   때문에 브라우저의 "소리 있는 자동재생 차단" 정책에 걸리지 않는다.
 let forceUnmuteNextVideo = false;
 current = pickNextMediaIndex();
+// ★ 이중 안전장치: order 배열 조작과 무관하게, 첫 슬라이드가 혹시라도 영상으로
+//   뽑혔으면 MEDIA 전체에서 첫 번째 이미지를 직접 찾아 강제로 바꿔치기한다.
+if(MEDIA[current] && MEDIA[current].type === 'video'){
+  const forcedImageIdx = MEDIA.findIndex((m) => m && m.type !== 'video');
+  if(forcedImageIdx !== -1) current = forcedImageIdx;
+}
 fillLayer(visibleLayer, MEDIA[current]);
 // 주의: 여기서 바로 'active'를 넣지 않는다 — 로딩화면이 걷히는 순간에 맞춰
 // 아래 reveal()에서 켜야 로딩화면→첫 이미지 전환이 자연스럽게 겹쳐 보인다.
@@ -1318,6 +1366,7 @@ function finishLoading(){
   loadingScreen.classList.add('hidden');
   setTimeout(() => {
     visibleLayer.classList.add('active');
+    retriggerVideoPlay(visibleLayer);
     document.body.classList.toggle('bg-dark', visibleLayer.dataset.dark === 'true');
   }, 700); // 위 #loading-screen의 opacity 트랜지션(.7s)이 다 끝난 뒤 시작
 }
