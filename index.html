@@ -1309,6 +1309,13 @@ fillLayer(visibleLayer, MEDIA[current]);
 // 아래 reveal()에서 켜야 로딩화면→첫 이미지 전환이 자연스럽게 겹쳐 보인다.
 setCaptionText(MEDIA[current].label || '');
 preloadedNextIndex = pickNextMediaIndex();
+// ★ 바로 다음에 이어질(두 번째) 슬라이드도 영상이면 안 된다 — 새로고침 직후
+//   아주 짧은 시간 안에 영상이 나타나는 것처럼 보이는 걸 막기 위해 이것도
+//   이미지로 강제한다 (첫 슬라이드와 겹치지 않는 다른 이미지로).
+if(MEDIA[preloadedNextIndex] && MEDIA[preloadedNextIndex].type === 'video'){
+  const forcedSecondImageIdx = MEDIA.findIndex((m, i) => m && m.type !== 'video' && i !== current);
+  if(forcedSecondImageIdx !== -1) preloadedNextIndex = forcedSecondImageIdx;
+}
 fillLayer(hiddenLayer, MEDIA[preloadedNextIndex]);
 scheduleAdvance();
 
